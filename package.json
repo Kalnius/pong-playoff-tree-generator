@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "npm --prefix static/playoff-ui run dev",
     "build": "npm --prefix static/playoff-ui run build",
-    "build:single": "npm --prefix static/playoff-ui run build:single",
     "preview": "npm --prefix static/playoff-ui run preview"
   }
 }
