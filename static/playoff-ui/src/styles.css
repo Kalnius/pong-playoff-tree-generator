@@ -1,0 +1,209 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 12px;
+  background: #f7f8fa;
+}
+
+.container {
+  max-width: 1200px;
+}
+
+.embed-mode {
+  max-width: none;
+}
+
+.intro {
+  max-width: 980px;
+  color: #42526e;
+}
+
+.info-panel {
+  background: #deebff;
+  color: #172b4d;
+  border: 1px solid #b3d4ff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.config label,
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.group {
+  background: white;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 220px;
+}
+
+.row input,
+.config input {
+  width: 120px;
+  padding: 4px;
+}
+
+.actions {
+  margin: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.secondary-actions {
+  margin-top: 0;
+}
+
+.messages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 20px;
+  color: #0c66e4;
+}
+
+.share-panel {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.share-panel label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.share-panel input {
+  width: 100%;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #c1c7d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #091e42;
+}
+
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+}
+
+.rounds {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding-bottom: 8px;
+}
+
+.round {
+  min-width: 230px;
+  background: white;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.match {
+  border: 1px solid #ebecf0;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+.match-title {
+  font-size: 12px;
+  color: #44546f;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.line {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.line button {
+  flex: 1;
+  text-align: left;
+  padding: 6px;
+}
+
+.line input {
+  width: 56px;
+}
+
+.bye-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #0052cc;
+  background: #deebff;
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+
+.winner {
+  border: 2px solid #36b37e;
+  font-weight: bold;
+}
+
+.png-preview {
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.png-preview img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #ebecf0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+svg {
+  background: #fff;
+}
+
+button,
+input {
+  font: inherit;
+}
