@@ -1,0 +1,4 @@
+# Forge is no longer used in this project.
+#
+# This file is intentionally kept as a marker for migration history.
+# The app is now a standalone static frontend hosted on GitHub Pages.
