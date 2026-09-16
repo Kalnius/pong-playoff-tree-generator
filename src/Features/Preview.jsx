@@ -1,18 +1,11 @@
 import React from "react";
 import { Link, useLoaderData } from "react-router";
-import {
-  readSharedSnapshot,
-  readSnapshot,
-  sanitizeSnapshot,
-  propagateWinners
-} from "./Admin";
+import { getData } from "../Data/DataClient";
+import { sanitizeSnapshot, propagateWinners } from "./Admin";
 
 export function previewLoader({ request }) {
-  const url = new URL(request.url);
-  const storageKey =
-    url.searchParams.get("storageKey") || "playoff-form-state-v2";
-  const snapshot =
-    readSharedSnapshot() || readSnapshot(storageKey) || sanitizeSnapshot(null);
+  const raw = getData({ url: request.url });
+  const snapshot = sanitizeSnapshot(raw);
   const tournament = snapshot.tournament
     ? propagateWinners({ ...snapshot.tournament, groups: snapshot.groups })
     : null;

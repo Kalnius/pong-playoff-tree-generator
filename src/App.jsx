@@ -6,8 +6,8 @@ import {
   Navigate,
   RouterProvider
 } from "react-router";
-import Admin from "./Admin";
-import Preview, { previewLoader } from "./Preview";
+import Admin from "./Features/Admin";
+import Preview, { previewLoader } from "./Features/Preview";
 
 export const router = createBrowserRouter(
   createRoutesFromElements(

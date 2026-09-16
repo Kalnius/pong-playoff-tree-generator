@@ -1,21 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-
-const DEFAULT_STORAGE_KEY = "playoff-form-state-v2";
+import { getData, saveData } from "../Data/DataClient";
 
 function getSearchParams() {
   return new URLSearchParams(window.location.search);
-}
-
-function getHashParams() {
-  const hash = window.location.hash.startsWith("#")
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  return new URLSearchParams(hash);
-}
-
-function getStorageKey() {
-  return getSearchParams().get("storageKey") || DEFAULT_STORAGE_KEY;
 }
 
 function getFlag(name) {
@@ -536,7 +524,7 @@ function applyAutomaticWinner(match) {
   return false;
 }
 
-function propagateWinners(state) {
+export function propagateWinners(state) {
   const byId = Object.fromEntries(
     state.matches.map((match) => [match.id, { ...match }])
   );
@@ -657,7 +645,7 @@ function restoreCompactSnapshot(snapshot) {
   return { groupCount, playersPerGroup, groups, tournament };
 }
 
-function sanitizeSnapshot(snapshot) {
+export function sanitizeSnapshot(snapshot) {
   const fallback = {
     groupCount: 2,
     playersPerGroup: 4,
@@ -712,57 +700,6 @@ function encodeBase64Url(value) {
       : base64;
 }
 
-function decodeBase64Url(value) {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    "="
-  );
-  const binary = window.atob(padded);
-  const bytes = Uint8Array.from(binary, (char) => char.codePointAt(0) || 0);
-  return new TextDecoder().decode(bytes);
-}
-
-function readSnapshot(storageKey) {
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return null;
-    return sanitizeSnapshot(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
-function writeSnapshot(storageKey, payload) {
-  try {
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify(buildCompactSnapshot(payload))
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function encodeSnapshot(payload) {
-  return encodeBase64Url(JSON.stringify(buildCompactSnapshot(payload)));
-}
-
-function decodeSnapshot(encoded) {
-  try {
-    return sanitizeSnapshot(JSON.parse(decodeBase64Url(encoded)));
-  } catch {
-    return null;
-  }
-}
-
-function readSharedSnapshot() {
-  const encoded =
-    getHashParams().get("state") || getSearchParams().get("state");
-  return encoded ? decodeSnapshot(encoded) : null;
-}
-
 function buildStateUrl(payload, options = {}) {
   const nextUrl = new URL(window.location.href);
 
@@ -780,19 +717,17 @@ function buildStateUrl(payload, options = {}) {
 
   nextUrl.searchParams.delete("state");
 
-  const hashParams = getHashParams();
-  hashParams.set("state", encodeSnapshot(payload));
+  const hash = nextUrl.hash.startsWith("#")
+    ? nextUrl.hash.slice(1)
+    : nextUrl.hash;
+  const hashParams = new URLSearchParams(hash);
+  hashParams.set(
+    "state",
+    encodeBase64Url(JSON.stringify(buildCompactSnapshot(payload)))
+  );
   nextUrl.hash = hashParams.toString();
 
   return nextUrl.toString();
-}
-
-function syncUrlState(payload) {
-  const nextUrl = buildStateUrl(payload, {
-    embed: getFlag("embed"),
-    readonly: getFlag("readonly")
-  });
-  window.history.replaceState(null, "", nextUrl);
 }
 
 function getParentOrigin() {
@@ -960,16 +895,9 @@ function downloadText(filename, text, mimeType) {
 }
 
 export default function Admin() {
-  const storageKey = getStorageKey();
   const embedMode = getFlag("embed");
   const readOnly = getFlag("readonly");
-  const initialSnapshot = useMemo(
-    () =>
-      readSharedSnapshot() ||
-      readSnapshot(storageKey) ||
-      sanitizeSnapshot(null),
-    [storageKey]
-  );
+  const initialSnapshot = useMemo(() => sanitizeSnapshot(getData()), []);
 
   const [groupCount, setGroupCount] = useState(initialSnapshot.groupCount);
   const [playersPerGroup, setPlayersPerGroup] = useState(
@@ -1069,11 +997,10 @@ export default function Admin() {
   }, [groups]);
 
   useEffect(() => {
-    writeSnapshot(storageKey, payload);
-    syncUrlState(payload);
+    saveData(buildCompactSnapshot(payload));
     postStateToParent(payload);
     setPngUrl(tournament ? renderBracketToPng(tournament) : "");
-  }, [storageKey, payload, tournament]);
+  }, [payload, tournament]);
 
   const updatePlayer = (groupIndex, playerIndex, value) => {
     if (readOnly) return;
@@ -1113,8 +1040,7 @@ export default function Admin() {
   };
 
   const onSave = () => {
-    const ok = writeSnapshot(storageKey, payload);
-    syncUrlState(payload);
+    const ok = saveData(buildCompactSnapshot(payload));
     postStateToParent(payload);
     setTemporaryMessage(
       setSaveMsg,
@@ -1478,5 +1404,3 @@ export default function Admin() {
     </div>
   );
 }
-
-export { readSharedSnapshot, readSnapshot, sanitizeSnapshot, propagateWinners };
