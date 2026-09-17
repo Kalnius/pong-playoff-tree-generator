@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
 import { getData, saveData } from "../Data/DataClient";
 
 function getSearchParams() {
@@ -1125,34 +1124,12 @@ export default function Admin() {
   return (
     <div className={`container${embedMode ? " embed-mode" : ""}`}>
       {!embedMode && (
-        <>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16
-            }}
-          >
-            <h2>Table Tennis Playoff Generator</h2>
-            <Link
-              to="/preview"
-              style={{
-                color: "#0052cc",
-                textDecoration: "none",
-                fontWeight: "bold"
-              }}
-            >
-              Go to Preview &rarr;
-            </Link>
-          </div>
-          <p className="intro">
-            The bracket now uses a seeded knockout model: better group-stage
-            placements receive later entry via byes, while the lowest remaining
-            placements are paired first, usually against the same finishing
-            place from another group.
-          </p>
-        </>
+        <p className="intro">
+          The bracket now uses a seeded knockout model: better group-stage
+          placements receive later entry via byes, while the lowest remaining
+          placements are paired first, usually against the same finishing place
+          from another group.
+        </p>
       )}
 
       {!embedMode && (

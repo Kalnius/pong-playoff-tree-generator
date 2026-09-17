@@ -31,27 +31,6 @@ export default function Preview() {
 
   return (
     <div className="container embed-mode">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16
-        }}
-      >
-        <h2>Playoff Bracket Preview</h2>
-        <Link
-          to="/admin"
-          style={{
-            color: "#0052cc",
-            textDecoration: "none",
-            fontWeight: "bold"
-          }}
-        >
-          Go to Admin &rarr;
-        </Link>
-      </div>
-
       {tournament ? (
         <>
           <div className="summary-bar">

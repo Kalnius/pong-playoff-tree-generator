@@ -2,7 +2,12 @@
 node_modules/
 
 # Production build
-# /dist/
+dist/
+
+# Package lock files (because locally and in github there are different npm repositories used)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Environment variables
 .env
