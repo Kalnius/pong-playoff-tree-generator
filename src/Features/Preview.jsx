@@ -1,24 +1,14 @@
 import React from "react";
 import { Link, useLoaderData } from "react-router";
 import { getData } from "../Data/DataClient";
-import { sanitizeSnapshot, propagateWinners } from "./Admin";
 
 export function previewLoader({ request }) {
-  const raw = getData({ url: request.url });
-  const snapshot = sanitizeSnapshot(raw);
-  const tournament = snapshot.tournament
-    ? propagateWinners({ ...snapshot.tournament, groups: snapshot.groups })
-    : null;
-
-  return {
-    ...snapshot,
-    tournament
-  };
+  return getData({ url: request.url });
 }
 
 export default function Preview() {
-  const data = useLoaderData() || {};
-  const { tournament, groups } = data;
+  const data = useLoaderData();
+  const tournament = data?.tournament;
 
   const groupedMatches = React.useMemo(() => {
     if (!tournament?.matches) return {};
@@ -110,9 +100,9 @@ export default function Preview() {
         </>
       ) : (
         <div className="info-panel">
-          No tournament generated yet. Head to the{" "}
+          No playoff tree generated yet. Head to the{" "}
           <Link to="/admin">Admin</Link> page to configure and generate the
-          bracket.
+          playoff tree first.
         </div>
       )}
     </div>

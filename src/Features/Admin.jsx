@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getData, saveData } from "../Data/DataClient";
+import { buildStateUrl, getData, saveData } from "../Data/DataClient";
 
 function groupName(index) {
   return String.fromCodePoint(65 + index);
@@ -553,158 +553,34 @@ export function propagateWinners(state) {
   };
 }
 
-function sanitizeTournament(tournament) {
-  if (!tournament || !Array.isArray(tournament.matches)) return null;
-
+export function getDefaultState(groupCount = 2, playersPerGroup = 4) {
   return {
-    ...tournament,
-    bracketSize: Number(tournament.bracketSize) || 0,
-    totalPlayers: Number(tournament.totalPlayers) || 0,
-    totalRounds: Number(tournament.totalRounds) || 0,
-    byeCount: Number(tournament.byeCount) || 0,
-    matches: tournament.matches.map((match) => ({
-      ...match,
-      home: match.home || "",
-      away: match.away || "",
-      scoreHome: match.scoreHome ?? "",
-      scoreAway: match.scoreAway ?? "",
-      winner: match.winner || ""
-    }))
+    groupCount,
+    playersPerGroup,
+    groups: makeInitialGroups(groupCount, playersPerGroup),
+    tournament: null
   };
 }
 
-function buildCompactSnapshot(payload) {
-  return {
-    version: 2,
-    groupCount: payload.groupCount,
-    playersPerGroup: payload.playersPerGroup,
-    groups: payload.groups.map((group) => [...group.rankedPlayers]),
-    results: payload.tournament
-      ? payload.tournament.matches.map((match) => [
-          match.id,
-          match.scoreHome ?? "",
-          match.scoreAway ?? "",
-          match.winner || ""
-        ])
-      : null
-  };
-}
-
-function restoreCompactSnapshot(snapshot) {
-  const groupCount = Math.min(8, Math.max(2, Number(snapshot.groupCount) || 2));
+function parseState(data) {
+  if (!data || typeof data !== "object") return null;
+  const groupCount = Math.min(8, Math.max(2, Number(data.groupCount) || 2));
   const playersPerGroup = Math.min(
     16,
-    Math.max(4, Number(snapshot.playersPerGroup) || 4)
+    Math.max(4, Number(data.playersPerGroup) || 4)
   );
   const groups = resizeGroups(
-    Array.isArray(snapshot.groups)
-      ? snapshot.groups.map((rankedPlayers, index) => ({
-          id: groupName(index),
-          rankedPlayers
-        }))
+    Array.isArray(data.groups)
+      ? data.groups
       : makeInitialGroups(groupCount, playersPerGroup),
     groupCount,
     playersPerGroup
   );
-
-  let tournament = null;
-  if (Array.isArray(snapshot.results)) {
-    const generated = generateTournament(groups);
-    const resultsById = new Map(
-      snapshot.results.map(([id, scoreHome, scoreAway, winner]) => [
-        id,
-        { scoreHome, scoreAway, winner }
-      ])
-    );
-
-    tournament = propagateWinners({
-      ...generated,
-      matches: generated.matches.map((match) => {
-        const saved = resultsById.get(match.id);
-        if (!saved) return match;
-        return {
-          ...match,
-          scoreHome: normalizeScore(saved.scoreHome),
-          scoreAway: normalizeScore(saved.scoreAway),
-          winner: saved.winner || ""
-        };
-      })
-    });
-  }
+  const tournament = data.tournament
+    ? propagateWinners({ ...data.tournament, groups })
+    : null;
 
   return { groupCount, playersPerGroup, groups, tournament };
-}
-
-export function sanitizeSnapshot(snapshot) {
-  const fallback = {
-    groupCount: 2,
-    playersPerGroup: 4,
-    groups: makeInitialGroups(2, 4),
-    tournament: null
-  };
-
-  if (!snapshot || typeof snapshot !== "object") return fallback;
-
-  if (
-    snapshot.version === 2 &&
-    Array.isArray(snapshot.groups) &&
-    !snapshot.groups[0]?.rankedPlayers
-  ) {
-    return restoreCompactSnapshot(snapshot);
-  }
-
-  const groupCount = Math.min(
-    8,
-    Math.max(2, Number(snapshot.groupCount) || fallback.groupCount)
-  );
-  const playersPerGroup = Math.min(
-    16,
-    Math.max(4, Number(snapshot.playersPerGroup) || fallback.playersPerGroup)
-  );
-  const groups = resizeGroups(
-    Array.isArray(snapshot.groups) ? snapshot.groups : fallback.groups,
-    groupCount,
-    playersPerGroup
-  );
-
-  return {
-    groupCount,
-    playersPerGroup,
-    groups,
-    tournament: sanitizeTournament(snapshot.tournament)
-  };
-}
-
-function encodeBase64Url(value) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCodePoint(byte);
-  });
-
-  const base64 = window.btoa(binary).replaceAll("+", "-").replaceAll("/", "_");
-  return base64.endsWith("==")
-    ? base64.slice(0, -2)
-    : base64.endsWith("=")
-      ? base64.slice(0, -1)
-      : base64;
-}
-
-function buildStateUrl(payload) {
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.delete("state");
-
-  const hash = nextUrl.hash.startsWith("#")
-    ? nextUrl.hash.slice(1)
-    : nextUrl.hash;
-  const hashParams = new URLSearchParams(hash);
-  hashParams.set(
-    "state",
-    encodeBase64Url(JSON.stringify(buildCompactSnapshot(payload)))
-  );
-  nextUrl.hash = hashParams.toString();
-
-  return nextUrl.toString();
 }
 
 function shortenName(value, maxLength = 22) {
@@ -848,21 +724,16 @@ function downloadText(filename, text, mimeType) {
 }
 
 export default function Admin() {
-  const initialSnapshot = useMemo(() => sanitizeSnapshot(getData()), []);
+  const initialData = useMemo(() => {
+    return parseState(getData()) || getDefaultState();
+  }, []);
 
-  const [groupCount, setGroupCount] = useState(initialSnapshot.groupCount);
+  const [groupCount, setGroupCount] = useState(initialData.groupCount);
   const [playersPerGroup, setPlayersPerGroup] = useState(
-    initialSnapshot.playersPerGroup
+    initialData.playersPerGroup
   );
-  const [groups, setGroups] = useState(initialSnapshot.groups);
-  const [tournament, setTournament] = useState(
-    initialSnapshot.tournament
-      ? propagateWinners({
-          ...initialSnapshot.tournament,
-          groups: initialSnapshot.groups
-        })
-      : null
-  );
+  const [groups, setGroups] = useState(initialData.groups);
+  const [tournament, setTournament] = useState(initialData.tournament);
   const [saveMsg, setSaveMsg] = useState("");
   const [shareMsg, setShareMsg] = useState("");
   const [pngMsg, setPngMsg] = useState("");
@@ -892,16 +763,13 @@ export default function Admin() {
     window.setTimeout(() => setter(""), 1800);
   };
 
-  const applySnapshot = (snapshot) => {
-    const next = sanitizeSnapshot(snapshot);
+  const applyState = (data) => {
+    const next = parseState(data);
+    if (!next) return;
     setGroupCount(next.groupCount);
     setPlayersPerGroup(next.playersPerGroup);
     setGroups(next.groups);
-    setTournament(
-      next.tournament
-        ? propagateWinners({ ...next.tournament, groups: next.groups })
-        : null
-    );
+    setTournament(next.tournament);
   };
 
   useEffect(() => {
@@ -922,7 +790,7 @@ export default function Admin() {
   }, [groups]);
 
   useEffect(() => {
-    saveData(buildCompactSnapshot(payload));
+    saveData(payload);
     setPngUrl(tournament ? renderBracketToPng(tournament) : "");
   }, [payload, tournament]);
 
@@ -963,7 +831,7 @@ export default function Admin() {
   };
 
   const onSave = () => {
-    const ok = saveData(buildCompactSnapshot(payload));
+    const ok = saveData(payload);
     setTemporaryMessage(
       setSaveMsg,
       ok ? "Saved in this browser and in the URL." : "Could not save locally."
@@ -985,7 +853,7 @@ export default function Admin() {
   const onExportJson = () => {
     downloadText(
       "playoff-state.json",
-      JSON.stringify(buildCompactSnapshot(payload), null, 2),
+      JSON.stringify(payload, null, 2),
       "application/json"
     );
     setTemporaryMessage(setSaveMsg, "JSON backup downloaded.");
@@ -998,7 +866,7 @@ export default function Admin() {
 
     try {
       const raw = await file.text();
-      applySnapshot(JSON.parse(raw));
+      applyState(JSON.parse(raw));
       setTemporaryMessage(setSaveMsg, "JSON backup imported.");
     } catch {
       setTemporaryMessage(setSaveMsg, "Could not import that JSON file.");
@@ -1035,110 +903,104 @@ export default function Admin() {
   return (
     <div className="container">
       <p className="intro">
-          The bracket now uses a seeded knockout model: better group-stage
-          placements receive later entry via byes, while the lowest remaining
-          placements are paired first, usually against the same finishing place
-          from another group.
+        The bracket now uses a seeded knockout model: better group-stage
+        placements receive later entry via byes, while the lowest remaining
+        placements are paired first, usually against the same finishing place
+        from another group.
       </p>
 
       <div className="info-panel">
-          <strong>Important GitHub Pages persistence note:</strong> local
-          browser save is still available, but the durable, redeploy-safe
-          version is the URL itself. Every change is mirrored into the page URL,
-          and you can also export a JSON backup. A true always-updating public PNG URL
-          is not possible on plain static hosting without a backend, so PNG
-          export is provided as a snapshot.
+        <strong>Important GitHub Pages persistence note:</strong> local browser
+        save is still available, but the durable, redeploy-safe version is the
+        URL itself. Every change is mirrored into the page URL, and you can also
+        export a JSON backup. A true always-updating public PNG URL is not
+        possible on plain static hosting without a backend, so PNG export is
+        provided as a snapshot.
       </div>
 
       <div className="config">
-          <label>
-            Group count{" "}
-            <input
-              type="number"
-              min={2}
-              max={8}
-              value={groupCount}
-              onChange={(event) =>
-                setGroupCount(
-                  Math.min(8, Math.max(2, Number(event.target.value) || 2))
-                )
-              }
-            />
-          </label>
-          <label>
-            Players per group{" "}
-            <input
-              type="number"
-              min={4}
-              max={16}
-              value={playersPerGroup}
-              onChange={(event) =>
-                setPlayersPerGroup(
-                  Math.min(16, Math.max(4, Number(event.target.value) || 4))
-                )
-              }
-            />
-          </label>
+        <label>
+          Group count{" "}
+          <input
+            type="number"
+            min={2}
+            max={8}
+            value={groupCount}
+            onChange={(event) =>
+              setGroupCount(
+                Math.min(8, Math.max(2, Number(event.target.value) || 2))
+              )
+            }
+          />
+        </label>
+        <label>
+          Players per group{" "}
+          <input
+            type="number"
+            min={4}
+            max={16}
+            value={playersPerGroup}
+            onChange={(event) =>
+              setPlayersPerGroup(
+                Math.min(16, Math.max(4, Number(event.target.value) || 4))
+              )
+            }
+          />
+        </label>
       </div>
 
       <>
-          <h3>Group standings (ranked)</h3>
-          <div className="groups">
-            {groups.map((group, groupIndex) => (
-              <div className="group" key={group.id}>
-                <h4>Group {group.id}</h4>
-                {group.rankedPlayers.map((player, playerIndex) => (
-                  <div className="row" key={`${group.id}-${playerIndex}`}>
-                    <span>{playerIndex + 1}.</span>
-                    <input
-                      type="text"
-                      value={player}
-                      placeholder={`${group.id}${playerIndex + 1}`}
-                      onChange={(event) =>
-                        updatePlayer(
-                          groupIndex,
-                          playerIndex,
-                          event.target.value
-                        )
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+        <h3>Group standings (ranked)</h3>
+        <div className="groups">
+          {groups.map((group, groupIndex) => (
+            <div className="group" key={group.id}>
+              <h4>Group {group.id}</h4>
+              {group.rankedPlayers.map((player, playerIndex) => (
+                <div className="row" key={`${group.id}-${playerIndex}`}>
+                  <span>{playerIndex + 1}.</span>
+                  <input
+                    type="text"
+                    value={player}
+                    placeholder={`${group.id}${playerIndex + 1}`}
+                    onChange={(event) =>
+                      updatePlayer(groupIndex, playerIndex, event.target.value)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </>
 
       <>
-          <div className="actions">
-            <button onClick={onGenerate}>
-              Generate Playoff Tree
-            </button>
-            <button onClick={onSave}>Save in browser</button>
-            <button onClick={onCopyShareLink}>Copy live share link</button>
-            <button onClick={onExportJson}>Download JSON backup</button>
-            <button onClick={() => fileInputRef.current?.click()}>
-              Import JSON backup
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json"
-              hidden
-              onChange={onImportJson}
-            />
-          </div>
-          <div className="messages">
-            <span>{saveMsg}</span>
-            <span>{shareMsg}</span>
-          </div>
+        <div className="actions">
+          <button onClick={onGenerate}>Generate Playoff Tree</button>
+          <button onClick={onSave}>Save in browser</button>
+          <button onClick={onCopyShareLink}>Copy live share link</button>
+          <button onClick={onExportJson}>Download JSON backup</button>
+          <button onClick={() => fileInputRef.current?.click()}>
+            Import JSON backup
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={onImportJson}
+          />
+        </div>
+        <div className="messages">
+          <span>{saveMsg}</span>
+          <span>{shareMsg}</span>
+        </div>
 
-          <div className="share-panel">
-            <label>
-              <span>Live share link</span>
-              <input type="text" readOnly value={shareUrl} />
-            </label>
-          </div>
+        <div className="share-panel">
+          <label>
+            <span>Live share link</span>
+            <input type="text" readOnly value={shareUrl} />
+          </label>
+        </div>
       </>
 
       {tournament && (
@@ -1156,14 +1018,14 @@ export default function Admin() {
           </div>
 
           <div className="actions secondary-actions">
-              <button onClick={refreshPngPreview}>Refresh PNG preview</button>
-              <button onClick={onDownloadPng} disabled={!pngUrl}>
-                Download PNG snapshot
-              </button>
-              <button onClick={onCopyPng} disabled={!pngUrl}>
-                Copy PNG data URL
-              </button>
-              <span>{pngMsg}</span>
+            <button onClick={refreshPngPreview}>Refresh PNG preview</button>
+            <button onClick={onDownloadPng} disabled={!pngUrl}>
+              Download PNG snapshot
+            </button>
+            <button onClick={onCopyPng} disabled={!pngUrl}>
+              Copy PNG data URL
+            </button>
+            <span>{pngMsg}</span>
           </div>
 
           <h3>Playoff</h3>

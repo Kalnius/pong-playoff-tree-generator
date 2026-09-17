@@ -54,6 +54,23 @@ function getHashParams(url) {
   return new URLSearchParams(hash);
 }
 
+export function buildStateUrl(data, baseUrl) {
+  try {
+    const nextUrl = new URL(baseUrl || window.location.href);
+    nextUrl.searchParams.delete("state");
+    const hashParams = getHashParams(baseUrl);
+    if (data !== undefined && data !== null) {
+      hashParams.set("state", encodeBase64Url(JSON.stringify(data)));
+    } else {
+      hashParams.delete("state");
+    }
+    nextUrl.hash = hashParams.toString();
+    return nextUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
 export function getData(options = {}) {
   const { storageKey, url } = options;
   const hashParams = getHashParams(url);
