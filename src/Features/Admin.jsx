@@ -1134,7 +1134,7 @@ export default function Admin() {
               marginBottom: 16
             }}
           >
-            <h2>Table Tennis Playoff Generator</h2>
+            <h2>Table Tennis Playoff Generator 2</h2>
             <Link
               to="/preview"
               style={{
