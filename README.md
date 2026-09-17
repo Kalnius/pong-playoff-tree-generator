@@ -1,5 +1,7 @@
 # Table Tennis Playoff Form (Static App)
 
+ACCESS VIA: https://kalnius.github.io/pong-playoff-tree-generator/
+
 This project is now a standalone static React app (no Forge runtime).
 
 It lets users:
