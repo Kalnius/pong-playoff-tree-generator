@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getData, saveData } from "../Data/DataClient";
 
-function getSearchParams() {
-  return new URLSearchParams(window.location.search);
-}
-
-function getFlag(name) {
-  const value = getSearchParams().get(name);
-  return value === "1" || value === "true";
-}
-
 function groupName(index) {
   return String.fromCodePoint(65 + index);
 }
@@ -699,21 +690,8 @@ function encodeBase64Url(value) {
       : base64;
 }
 
-function buildStateUrl(payload, options = {}) {
+function buildStateUrl(payload) {
   const nextUrl = new URL(window.location.href);
-
-  if (options.embed) {
-    nextUrl.searchParams.set("embed", "1");
-  } else {
-    nextUrl.searchParams.delete("embed");
-  }
-
-  if (options.readonly) {
-    nextUrl.searchParams.set("readonly", "1");
-  } else {
-    nextUrl.searchParams.delete("readonly");
-  }
-
   nextUrl.searchParams.delete("state");
 
   const hash = nextUrl.hash.startsWith("#")
@@ -727,30 +705,6 @@ function buildStateUrl(payload, options = {}) {
   nextUrl.hash = hashParams.toString();
 
   return nextUrl.toString();
-}
-
-function getParentOrigin() {
-  try {
-    return window.parent !== window && document.referrer
-      ? new URL(document.referrer).origin
-      : window.location.origin;
-  } catch {
-    return window.location.origin;
-  }
-}
-
-function postStateToParent(payload) {
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage(
-      { type: "playoff:state", payload },
-      getParentOrigin()
-    );
-  }
-}
-
-function isAllowedMessageOrigin(origin) {
-  const allowed = new Set([window.location.origin, getParentOrigin()]);
-  return allowed.has(origin);
 }
 
 function shortenName(value, maxLength = 22) {
@@ -894,8 +848,6 @@ function downloadText(filename, text, mimeType) {
 }
 
 export default function Admin() {
-  const embedMode = getFlag("embed");
-  const readOnly = getFlag("readonly");
   const initialSnapshot = useMemo(() => sanitizeSnapshot(getData()), []);
 
   const [groupCount, setGroupCount] = useState(initialSnapshot.groupCount);
@@ -925,10 +877,6 @@ export default function Admin() {
   );
 
   const shareUrl = useMemo(() => buildStateUrl(payload), [payload]);
-  const embedUrl = useMemo(
-    () => buildStateUrl(payload, { embed: true, readonly: true }),
-    [payload]
-  );
 
   const groupedMatches = useMemo(() => {
     if (!tournament) return {};
@@ -957,28 +905,6 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    const onMessage = (event) => {
-      if (!isAllowedMessageOrigin(event.origin)) return;
-      const msg = event.data;
-      if (!msg || typeof msg !== "object") return;
-
-      if (msg.type === "playoff:request-state") {
-        event.source?.postMessage(
-          { type: "playoff:state", payload },
-          getParentOrigin()
-        );
-      }
-
-      if (msg.type === "playoff:set-state" && msg.payload) {
-        applySnapshot(msg.payload);
-      }
-    };
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [payload]);
-
-  useEffect(() => {
     if (!configInitializedRef.current) {
       configInitializedRef.current = true;
       return;
@@ -997,12 +923,10 @@ export default function Admin() {
 
   useEffect(() => {
     saveData(buildCompactSnapshot(payload));
-    postStateToParent(payload);
     setPngUrl(tournament ? renderBracketToPng(tournament) : "");
   }, [payload, tournament]);
 
   const updatePlayer = (groupIndex, playerIndex, value) => {
-    if (readOnly) return;
     setGroups((current) => {
       const copy = structuredClone(current);
       copy[groupIndex].rankedPlayers[playerIndex] = value;
@@ -1016,7 +940,7 @@ export default function Admin() {
   };
 
   const setWinner = (matchId, winner, scoreHome, scoreAway) => {
-    if (readOnly || !tournament) return;
+    if (!tournament) return;
     const copy = structuredClone(tournament);
     const match = copy.matches.find((candidate) => candidate.id === matchId);
     if (!match) return;
@@ -1028,7 +952,7 @@ export default function Admin() {
   };
 
   const updateMatchScores = (matchId, scoreHome, scoreAway) => {
-    if (readOnly || !tournament) return;
+    if (!tournament) return;
     const copy = structuredClone(tournament);
     const match = copy.matches.find((candidate) => candidate.id === matchId);
     if (!match) return;
@@ -1040,7 +964,6 @@ export default function Admin() {
 
   const onSave = () => {
     const ok = saveData(buildCompactSnapshot(payload));
-    postStateToParent(payload);
     setTemporaryMessage(
       setSaveMsg,
       ok ? "Saved in this browser and in the URL." : "Could not save locally."
@@ -1051,18 +974,6 @@ export default function Admin() {
     try {
       await copyText(shareUrl);
       setTemporaryMessage(setShareMsg, "Share link copied.");
-    } catch {
-      setTemporaryMessage(
-        setShareMsg,
-        "Clipboard access is not available in this browser."
-      );
-    }
-  };
-
-  const onCopyEmbedLink = async () => {
-    try {
-      await copyText(embedUrl);
-      setTemporaryMessage(setShareMsg, "Embed link copied.");
     } catch {
       setTemporaryMessage(
         setShareMsg,
@@ -1122,30 +1033,24 @@ export default function Admin() {
   };
 
   return (
-    <div className={`container${embedMode ? " embed-mode" : ""}`}>
-      {!embedMode && (
-        <p className="intro">
+    <div className="container">
+      <p className="intro">
           The bracket now uses a seeded knockout model: better group-stage
           placements receive later entry via byes, while the lowest remaining
           placements are paired first, usually against the same finishing place
           from another group.
-        </p>
-      )}
+      </p>
 
-      {!embedMode && (
-        <div className="info-panel">
+      <div className="info-panel">
           <strong>Important GitHub Pages persistence note:</strong> local
           browser save is still available, but the durable, redeploy-safe
           version is the URL itself. Every change is mirrored into the page URL,
-          and you can also export a JSON backup. For external live embedding,
-          use the iframe embed link below. A true always-updating public PNG URL
+          and you can also export a JSON backup. A true always-updating public PNG URL
           is not possible on plain static hosting without a backend, so PNG
           export is provided as a snapshot.
-        </div>
-      )}
+      </div>
 
-      {!embedMode && (
-        <div className="config">
+      <div className="config">
           <label>
             Group count{" "}
             <input
@@ -1153,7 +1058,6 @@ export default function Admin() {
               min={2}
               max={8}
               value={groupCount}
-              disabled={readOnly}
               onChange={(event) =>
                 setGroupCount(
                   Math.min(8, Math.max(2, Number(event.target.value) || 2))
@@ -1168,7 +1072,6 @@ export default function Admin() {
               min={4}
               max={16}
               value={playersPerGroup}
-              disabled={readOnly}
               onChange={(event) =>
                 setPlayersPerGroup(
                   Math.min(16, Math.max(4, Number(event.target.value) || 4))
@@ -1176,11 +1079,9 @@ export default function Admin() {
               }
             />
           </label>
-        </div>
-      )}
+      </div>
 
-      {!embedMode && (
-        <>
+      <>
           <h3>Group standings (ranked)</h3>
           <div className="groups">
             {groups.map((group, groupIndex) => (
@@ -1192,7 +1093,6 @@ export default function Admin() {
                     <input
                       type="text"
                       value={player}
-                      disabled={readOnly}
                       placeholder={`${group.id}${playerIndex + 1}`}
                       onChange={(event) =>
                         updatePlayer(
@@ -1207,20 +1107,15 @@ export default function Admin() {
               </div>
             ))}
           </div>
-        </>
-      )}
+      </>
 
-      {!embedMode && (
-        <>
+      <>
           <div className="actions">
-            <button onClick={onGenerate} disabled={readOnly}>
+            <button onClick={onGenerate}>
               Generate Playoff Tree
             </button>
             <button onClick={onSave}>Save in browser</button>
             <button onClick={onCopyShareLink}>Copy live share link</button>
-            <button onClick={onCopyEmbedLink} disabled={!tournament}>
-              Copy iframe embed link
-            </button>
             <button onClick={onExportJson}>Download JSON backup</button>
             <button onClick={() => fileInputRef.current?.click()}>
               Import JSON backup
@@ -1243,13 +1138,8 @@ export default function Admin() {
               <span>Live share link</span>
               <input type="text" readOnly value={shareUrl} />
             </label>
-            <label>
-              <span>Read-only iframe embed link</span>
-              <input type="text" readOnly value={embedUrl} />
-            </label>
           </div>
-        </>
-      )}
+      </>
 
       {tournament && (
         <>
@@ -1265,8 +1155,7 @@ export default function Admin() {
             </span>
           </div>
 
-          {!embedMode && (
-            <div className="actions secondary-actions">
+          <div className="actions secondary-actions">
               <button onClick={refreshPngPreview}>Refresh PNG preview</button>
               <button onClick={onDownloadPng} disabled={!pngUrl}>
                 Download PNG snapshot
@@ -1275,10 +1164,9 @@ export default function Admin() {
                 Copy PNG data URL
               </button>
               <span>{pngMsg}</span>
-            </div>
-          )}
+          </div>
 
-          <h3>{embedMode ? "Playoff Bracket" : "Playoff"}</h3>
+          <h3>Playoff</h3>
           <div className="rounds">
             {Object.keys(groupedMatches)
               .map(Number)
@@ -1314,14 +1202,14 @@ export default function Admin() {
                                 match.scoreAway
                               )
                             }
-                            disabled={!match.home || readOnly || isBye}
+                            disabled={!match.home || isBye}
                           >
                             {match.home || "TBD"}
                           </button>
                           <input
                             type="number"
                             value={match.scoreHome}
-                            disabled={readOnly || isBye}
+                            disabled={isBye}
                             onChange={(event) =>
                               updateMatchScores(
                                 match.id,
@@ -1345,14 +1233,14 @@ export default function Admin() {
                                 match.scoreAway
                               )
                             }
-                            disabled={!match.away || readOnly || isBye}
+                            disabled={!match.away || isBye}
                           >
                             {match.away || "TBD"}
                           </button>
                           <input
                             type="number"
                             value={match.scoreAway}
-                            disabled={readOnly || isBye}
+                            disabled={isBye}
                             onChange={(event) =>
                               updateMatchScores(
                                 match.id,
@@ -1372,7 +1260,7 @@ export default function Admin() {
         </>
       )}
 
-      {!embedMode && pngUrl && (
+      {pngUrl && (
         <div className="png-preview">
           <h3>PNG snapshot preview</h3>
           <img src={pngUrl} alt="Generated playoff bracket preview" />

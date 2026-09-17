@@ -83,7 +83,7 @@ export function getData(options = {}) {
 }
 
 export function saveData(data, options = {}) {
-  const { storageKey, embed, readonly } = options;
+  const { storageKey } = options;
   const searchParams = getSearchParams();
   const key =
     storageKey || searchParams.get("storageKey") || DEFAULT_STORAGE_KEY;
@@ -98,15 +98,6 @@ export function saveData(data, options = {}) {
 
   try {
     const nextUrl = new URL(window.location.href);
-    if (embed !== undefined) {
-      if (embed) nextUrl.searchParams.set("embed", "1");
-      else nextUrl.searchParams.delete("embed");
-    }
-    if (readonly !== undefined) {
-      if (readonly) nextUrl.searchParams.set("readonly", "1");
-      else nextUrl.searchParams.delete("readonly");
-    }
-
     nextUrl.searchParams.delete("state");
     const hashParams = getHashParams();
     if (data !== undefined && data !== null) {

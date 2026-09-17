@@ -30,7 +30,7 @@ export default function Preview() {
   }, [tournament]);
 
   return (
-    <div className="container embed-mode">
+    <div className="container">
       {tournament ? (
         <>
           <div className="summary-bar">

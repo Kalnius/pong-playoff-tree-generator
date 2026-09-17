@@ -9,10 +9,6 @@ body {
   max-width: 1200px;
 }
 
-.embed-mode {
-  max-width: none;
-}
-
 .intro {
   max-width: 980px;
   color: #42526e;

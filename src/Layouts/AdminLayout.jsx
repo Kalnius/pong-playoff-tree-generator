@@ -4,13 +4,6 @@ import { Link, Outlet, useLocation } from "react-router";
 export default function AdminLayout() {
   const location = useLocation();
   const isPreview = location.pathname.startsWith("/preview");
-  const searchParams = new URLSearchParams(location.search);
-  const isEmbed =
-    searchParams.get("embed") === "1" || searchParams.get("embed") === "true";
-
-  if (isEmbed) {
-    return <Outlet />;
-  }
 
   return (
     <>
