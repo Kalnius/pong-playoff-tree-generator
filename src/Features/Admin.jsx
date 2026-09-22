@@ -564,7 +564,7 @@ export function getDefaultState(groupCount = 2, playersPerGroup = 4) {
 
 function parseState(data) {
   if (!data || typeof data !== "object") return null;
-  const groupCount = Math.min(8, Math.max(2, Number(data.groupCount) || 2));
+  const groupCount = Number(data.groupCount) === 4 ? 4 : 2;
   const playersPerGroup = Math.min(
     16,
     Math.max(4, Number(data.playersPerGroup) || 4)
@@ -581,128 +581,6 @@ function parseState(data) {
     : null;
 
   return { groupCount, playersPerGroup, groups, tournament };
-}
-
-function shortenName(value, maxLength = 22) {
-  const text = value || "TBD";
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
-}
-
-function renderBracketToPng(tournament) {
-  if (!tournament) return "";
-
-  const groupedMatches = tournament.matches.reduce((acc, match) => {
-    acc[match.round] = acc[match.round] || [];
-    acc[match.round].push(match);
-    return acc;
-  }, {});
-
-  const rounds = Object.keys(groupedMatches)
-    .map(Number)
-    .sort((a, b) => a - b);
-
-  if (!rounds.length) return "";
-
-  const scale = 2;
-  const padding = 18;
-  const titleHeight = 34;
-  const roundWidth = 250;
-  const matchWidth = 220;
-  const matchHeight = 92;
-  const matchGap = 18;
-  const roundGap = 24;
-  const maxMatches = Math.max(
-    ...rounds.map((round) => groupedMatches[round].length)
-  );
-  const width =
-    padding * 2 +
-    rounds.length * roundWidth +
-    Math.max(0, rounds.length - 1) * roundGap;
-  const height =
-    padding * 2 +
-    titleHeight +
-    maxMatches * matchHeight +
-    Math.max(0, maxMatches - 1) * matchGap;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-
-  const context = canvas.getContext("2d");
-  if (!context) return "";
-
-  context.scale(scale, scale);
-  context.fillStyle = "#f7f8fa";
-  context.fillRect(0, 0, width, height);
-
-  rounds.forEach((round, roundIndex) => {
-    const x = padding + roundIndex * (roundWidth + roundGap);
-    const matches = groupedMatches[round];
-
-    context.fillStyle = "#172b4d";
-    context.font = "bold 16px Arial";
-    context.fillText(
-      matches[0]?.roundName || `Round ${round}`,
-      x,
-      padding + 16
-    );
-
-    matches.forEach((match, matchIndex) => {
-      const y = padding + titleHeight + matchIndex * (matchHeight + matchGap);
-      const isBye = Boolean(
-        (match.home && !match.away) || (!match.home && match.away)
-      );
-
-      context.fillStyle = "#ffffff";
-      context.strokeStyle = "#dfe1e6";
-      context.lineWidth = 1;
-      context.fillRect(x, y, matchWidth, matchHeight);
-      context.strokeRect(x, y, matchWidth, matchHeight);
-
-      context.fillStyle = "#44546f";
-      context.font = "12px Arial";
-      context.fillText(`${match.label} (${match.id})`, x + 10, y + 16);
-
-      if (isBye) {
-        context.fillStyle = "#0052cc";
-        context.font = "bold 11px Arial";
-        context.fillText("BYE", x + matchWidth - 35, y + 16);
-      }
-
-      const lines = [
-        {
-          name: match.home || "TBD",
-          score: match.scoreHome,
-          winner: match.winner === match.home
-        },
-        {
-          name: match.away || "TBD",
-          score: match.scoreAway,
-          winner: match.winner === match.away
-        }
-      ];
-
-      lines.forEach((line, lineIndex) => {
-        const lineY = y + 38 + lineIndex * 26;
-        context.fillStyle = line.winner ? "#e3fcef" : "#f4f5f7";
-        context.fillRect(x + 10, lineY - 12, matchWidth - 20, 20);
-
-        context.fillStyle = line.winner ? "#006644" : "#172b4d";
-        context.font = `${line.winner ? "bold" : "normal"} 12px Arial`;
-        context.fillText(shortenName(line.name), x + 16, lineY + 2);
-
-        context.textAlign = "right";
-        context.fillText(
-          line.score === "" ? "-" : String(line.score),
-          x + matchWidth - 16,
-          lineY + 2
-        );
-        context.textAlign = "left";
-      });
-    });
-  });
-
-  return canvas.toDataURL("image/png");
 }
 
 async function copyText(value) {
@@ -736,9 +614,6 @@ export default function Admin() {
   const [tournament, setTournament] = useState(initialData.tournament);
   const [saveMsg, setSaveMsg] = useState("");
   const [shareMsg, setShareMsg] = useState("");
-  const [pngMsg, setPngMsg] = useState("");
-  const [pngUrl, setPngUrl] = useState("");
-
   const configInitializedRef = useRef(false);
   const fileInputRef = useRef(null);
 
@@ -791,7 +666,6 @@ export default function Admin() {
 
   useEffect(() => {
     saveData(payload);
-    setPngUrl(tournament ? renderBracketToPng(tournament) : "");
   }, [payload, tournament]);
 
   const updatePlayer = (groupIndex, playerIndex, value) => {
@@ -873,33 +747,6 @@ export default function Admin() {
     }
   };
 
-  const refreshPngPreview = () => {
-    if (!tournament) return;
-    setPngUrl(renderBracketToPng(tournament));
-    setTemporaryMessage(setPngMsg, "PNG preview refreshed.");
-  };
-
-  const onCopyPng = async () => {
-    if (!pngUrl) return;
-    try {
-      await copyText(pngUrl);
-      setTemporaryMessage(setPngMsg, "PNG data URL copied.");
-    } catch {
-      setTemporaryMessage(
-        setPngMsg,
-        "Clipboard access is not available in this browser."
-      );
-    }
-  };
-
-  const onDownloadPng = () => {
-    if (!pngUrl) return;
-    const link = document.createElement("a");
-    link.href = pngUrl;
-    link.download = "playoff-tree.png";
-    link.click();
-  };
-
   return (
     <div className="container">
       <p className="intro">
@@ -913,25 +760,19 @@ export default function Admin() {
         <strong>Important GitHub Pages persistence note:</strong> local browser
         save is still available, but the durable, redeploy-safe version is the
         URL itself. Every change is mirrored into the page URL, and you can also
-        export a JSON backup. A true always-updating public PNG URL is not
-        possible on plain static hosting without a backend, so PNG export is
-        provided as a snapshot.
+        export a JSON backup.
       </div>
 
       <div className="config">
         <label>
           Group count{" "}
-          <input
-            type="number"
-            min={2}
-            max={8}
+          <select
             value={groupCount}
-            onChange={(event) =>
-              setGroupCount(
-                Math.min(8, Math.max(2, Number(event.target.value) || 2))
-              )
-            }
-          />
+            onChange={(event) => setGroupCount(Number(event.target.value))}
+          >
+            <option value={2}>2</option>
+            <option value={4}>4</option>
+          </select>
         </label>
         <label>
           Players per group{" "}
@@ -1015,17 +856,6 @@ export default function Admin() {
             <span>
               <strong>Auto-byes:</strong> {tournament.byeCount}
             </span>
-          </div>
-
-          <div className="actions secondary-actions">
-            <button onClick={refreshPngPreview}>Refresh PNG preview</button>
-            <button onClick={onDownloadPng} disabled={!pngUrl}>
-              Download PNG snapshot
-            </button>
-            <button onClick={onCopyPng} disabled={!pngUrl}>
-              Copy PNG data URL
-            </button>
-            <span>{pngMsg}</span>
           </div>
 
           <h3>Playoff</h3>
@@ -1120,13 +950,6 @@ export default function Admin() {
               ))}
           </div>
         </>
-      )}
-
-      {pngUrl && (
-        <div className="png-preview">
-          <h3>PNG snapshot preview</h3>
-          <img src={pngUrl} alt="Generated playoff bracket preview" />
-        </div>
       )}
     </div>
   );
