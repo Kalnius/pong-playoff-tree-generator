@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildStateUrl, getData, saveData } from "../Data/DataClient";
+import PlayoffMatch from "./components/PlayoffMatch";
 
 function groupName(index) {
   return String.fromCodePoint(65 + index);
@@ -56,7 +57,8 @@ function makeMatch(id, round, roundName, label, homeSource, awaySource) {
     away: "",
     scoreHome: "",
     scoreAway: "",
-    winner: ""
+    winner: "",
+    technicalLoss: ""
   };
 }
 
@@ -345,6 +347,7 @@ function clearMatchResult(match) {
   match.scoreHome = "";
   match.scoreAway = "";
   match.winner = "";
+  match.technicalLoss = "";
 }
 
 function isPendingSource(source, resolvedName) {
@@ -357,6 +360,16 @@ function isPendingSource(source, resolvedName) {
 }
 
 function applyAutomaticWinner(match, homePending, awayPending) {
+  if (match.technicalLoss === "home") {
+    match.winner = match.away || "";
+    return true;
+  }
+
+  if (match.technicalLoss === "away") {
+    match.winner = match.home || "";
+    return true;
+  }
+
   if (match.home && !match.away && !awayPending) {
     match.winner = match.home;
     return true;
@@ -554,18 +567,6 @@ export default function Admin() {
     setTournament(propagateWinners(created));
   };
 
-  const setWinner = (matchId, winner, scoreHome, scoreAway) => {
-    if (!tournament) return;
-    const copy = structuredClone(tournament);
-    const match = copy.matches.find((candidate) => candidate.id === matchId);
-    if (!match) return;
-    match.scoreHome = normalizeScore(scoreHome);
-    match.scoreAway = normalizeScore(scoreAway);
-    match.winner =
-      winner || autoWinnerForMatch(match, match.scoreHome, match.scoreAway);
-    setTournament(propagateWinners({ ...copy, groups }));
-  };
-
   const updateMatchScores = (matchId, scoreHome, scoreAway) => {
     if (!tournament) return;
     const copy = structuredClone(tournament);
@@ -573,7 +574,32 @@ export default function Admin() {
     if (!match) return;
     match.scoreHome = normalizeScore(scoreHome);
     match.scoreAway = normalizeScore(scoreAway);
-    match.winner = autoWinnerForMatch(match, match.scoreHome, match.scoreAway);
+    if (!match.technicalLoss) {
+      match.winner = autoWinnerForMatch(
+        match,
+        match.scoreHome,
+        match.scoreAway
+      );
+    }
+    setTournament(propagateWinners({ ...copy, groups }));
+  };
+
+  const handleTechnicalLoss = (matchId, side) => {
+    if (!tournament) return;
+    const copy = structuredClone(tournament);
+    const match = copy.matches.find((candidate) => candidate.id === matchId);
+    if (!match) return;
+    if (match.technicalLoss === side) {
+      match.technicalLoss = "";
+      match.winner = autoWinnerForMatch(
+        match,
+        match.scoreHome,
+        match.scoreAway
+      );
+    } else {
+      match.technicalLoss = side;
+      match.winner = side === "home" ? match.away : match.home;
+    }
     setTournament(propagateWinners({ ...copy, groups }));
   };
 
@@ -740,85 +766,21 @@ export default function Admin() {
                   <h4>
                     {groupedMatches[round][0]?.roundName || `Round ${round}`}
                   </h4>
-                  {groupedMatches[round].map((match) => {
-                    const isBye = Boolean(
-                      (match.home && !match.away && !match.awaySource) ||
-                      (!match.home && match.away && !match.homeSource)
-                    );
-
-                    return (
-                      <div className="match" key={match.id}>
-                        <div className="match-title">
-                          {match.label} ({match.id})
-                          {isBye ? (
-                            <span className="bye-badge">BYE</span>
-                          ) : null}
-                        </div>
-                        <div className="line">
-                          <button
-                            className={
-                              match.winner === match.home ? "winner" : ""
-                            }
-                            onClick={() =>
-                              setWinner(
-                                match.id,
-                                match.home,
-                                match.scoreHome,
-                                match.scoreAway
-                              )
-                            }
-                            disabled={!match.home || isBye}
-                          >
-                            {match.home || "TBD"}
-                          </button>
-                          <input
-                            type="number"
-                            value={match.scoreHome}
-                            disabled={isBye}
-                            onChange={(event) =>
-                              updateMatchScores(
-                                match.id,
-                                event.target.value,
-                                match.scoreAway
-                              )
-                            }
-                            placeholder="0"
-                          />
-                        </div>
-                        <div className="line">
-                          <button
-                            className={
-                              match.winner === match.away ? "winner" : ""
-                            }
-                            onClick={() =>
-                              setWinner(
-                                match.id,
-                                match.away,
-                                match.scoreHome,
-                                match.scoreAway
-                              )
-                            }
-                            disabled={!match.away || isBye}
-                          >
-                            {match.away || "TBD"}
-                          </button>
-                          <input
-                            type="number"
-                            value={match.scoreAway}
-                            disabled={isBye}
-                            onChange={(event) =>
-                              updateMatchScores(
-                                match.id,
-                                match.scoreHome,
-                                event.target.value
-                              )
-                            }
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {groupedMatches[round].map((match) => (
+                    <PlayoffMatch
+                      key={match.id}
+                      match={match}
+                      onTechnicalLoss={(side) =>
+                        handleTechnicalLoss(match.id, side)
+                      }
+                      onScoreHomeChange={(scoreHome) =>
+                        updateMatchScores(match.id, scoreHome, match.scoreAway)
+                      }
+                      onScoreAwayChange={(scoreAway) =>
+                        updateMatchScores(match.id, match.scoreHome, scoreAway)
+                      }
+                    />
+                  ))}
                 </div>
               ))}
           </div>
