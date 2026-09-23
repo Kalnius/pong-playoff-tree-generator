@@ -44,26 +44,6 @@ function getPlayerName(groups, groupIndex, rank) {
   return group.rankedPlayers[rank - 1] || `${group.id}${rank}`;
 }
 
-function buildRankedEntries(groups) {
-  const playersPerGroup = Math.max(
-    ...groups.map((group) => group.rankedPlayers.length),
-    0
-  );
-  const entries = [];
-
-  for (let rank = 1; rank <= playersPerGroup; rank += 1) {
-    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-      entries.push({
-        rank,
-        groupIndex,
-        source: { kind: "player", groupIndex, rank }
-      });
-    }
-  }
-
-  return entries;
-}
-
 function makeMatch(id, round, roundName, label, homeSource, awaySource) {
   return {
     id,
@@ -86,308 +66,231 @@ function nextPowerOfTwo(value) {
   return next;
 }
 
-function buildSeedOrder(size) {
-  let order = [1, 2];
+function getSeedForSlot(groups, groupCount, slotIndex, tierIndex) {
+  let groupIndex;
+  let rank;
 
-  while (order.length < size) {
-    const nextSize = order.length * 2;
-    order = order.flatMap((seed) => [seed, nextSize + 1 - seed]);
-  }
-
-  return order;
-}
-
-function buildOpeningPairs(entries) {
-  const byRank = new Map();
-
-  entries.forEach((entry) => {
-    const tier = byRank.get(entry.rank) || [];
-    tier.push(entry);
-    byRank.set(entry.rank, tier);
-  });
-
-  const pairs = [];
-  let carry = null;
-
-  [...byRank.keys()]
-    .sort((a, b) => a - b)
-    .forEach((rank) => {
-      const queue = [
-        ...(carry ? [carry] : []),
-        ...byRank.get(rank).sort((a, b) => a.groupIndex - b.groupIndex)
-      ];
-      carry = null;
-
-      while (queue.length >= 2) {
-        pairs.push([queue.shift(), queue.shift()]);
+  if (groupCount === 2) {
+    const isEvenTier = tierIndex % 2 === 0;
+    if (isEvenTier) {
+      if (slotIndex === 0) {
+        groupIndex = 1;
+        rank = tierIndex * 2 + 1;
+      } else if (slotIndex === 1) {
+        groupIndex = 0;
+        rank = tierIndex * 2 + 2;
+      } else if (slotIndex === 2) {
+        groupIndex = 1;
+        rank = tierIndex * 2 + 2;
+      } else {
+        groupIndex = 0;
+        rank = tierIndex * 2 + 1;
       }
-
-      if (queue.length === 1) {
-        carry = queue.shift();
+    } else {
+      if (slotIndex === 0) {
+        groupIndex = 0;
+        rank = tierIndex * 2 + 2;
+      } else if (slotIndex === 1) {
+        groupIndex = 1;
+        rank = tierIndex * 2 + 1;
+      } else if (slotIndex === 2) {
+        groupIndex = 0;
+        rank = tierIndex * 2 + 1;
+      } else {
+        groupIndex = 1;
+        rank = tierIndex * 2 + 2;
       }
-    });
-
-  if (carry) {
-    throw new Error("Could not pair all opening-round players.");
-  }
-
-  return pairs;
-}
-
-function buildSeedAssignments(groups) {
-  const allEntries = buildRankedEntries(groups);
-  const totalPlayers = allEntries.length;
-  const bracketSize = nextPowerOfTwo(totalPlayers);
-  const byeCount = bracketSize - totalPlayers;
-  const assignments = {};
-
-  allEntries.slice(0, byeCount).forEach((entry, index) => {
-    assignments[index + 1] = entry.source;
-  });
-
-  const remainingEntries = allEntries.slice(byeCount);
-  const openingPairs = buildOpeningPairs(remainingEntries);
-  const seedPairs = [];
-  const seedOrder = buildSeedOrder(bracketSize);
-
-  for (let index = 0; index < seedOrder.length; index += 2) {
-    const firstSeed = seedOrder[index];
-    const secondSeed = seedOrder[index + 1];
-    const activeSeeds = [firstSeed, secondSeed].filter(
-      (seed) => seed <= totalPlayers && seed > byeCount
-    );
-
-    if (activeSeeds.length === 2) {
-      const orderedSeeds = [...activeSeeds].sort((a, b) => a - b);
-      seedPairs.push(orderedSeeds);
     }
+  } else {
+    const groupOrder = [
+      [0, 2, 1, 3],
+      [1, 3, 0, 2],
+      [2, 0, 3, 1],
+      [3, 1, 2, 0]
+    ];
+    groupIndex = groupOrder[slotIndex][tierIndex % 4];
+    rank = tierIndex + 1;
   }
 
-  const orderedSeedPairs = [...seedPairs].sort((a, b) => a[0] - b[0]);
-
-  orderedSeedPairs.forEach(([betterSeed, weakerSeed], index) => {
-    const [firstEntry, secondEntry] = openingPairs[index] || [];
-    if (firstEntry) assignments[betterSeed] = firstEntry.source;
-    if (secondEntry) assignments[weakerSeed] = secondEntry.source;
-  });
-
-  return { assignments, bracketSize, byeCount, totalPlayers };
-}
-
-function describeRound(round, totalRounds) {
-  if (round === totalRounds) return "Final";
-  if (round === totalRounds - 1) return "Semifinals";
-  if (round === totalRounds - 2) return "Quarterfinals";
-  return `Round ${round}`;
-}
-
-function applyRoundNames(matches) {
-  const totalRounds = Math.max(...matches.map((match) => match.round), 0);
+  const group = groups[groupIndex];
+  if (!group || rank > group.rankedPlayers.length) {
+    return null;
+  }
 
   return {
-    totalRounds,
-    matches: matches.map((match) => ({
-      ...match,
-      roundName: describeRound(match.round, totalRounds)
-    }))
+    kind: "player",
+    groupIndex,
+    rank
   };
 }
 
-function generateSeededTournament(groups, nextId) {
-  const totalPlayers = groups.length * (groups[0]?.rankedPlayers.length || 0);
-  if (totalPlayers < 2) {
-    return {
-      groups,
-      matches: [],
-      bracketSize: 0,
-      totalPlayers: 0,
-      totalRounds: 0,
-      byeCount: 0
-    };
-  }
-
-  const { assignments, bracketSize, byeCount } = buildSeedAssignments(groups);
-  const totalRounds = Math.log2(bracketSize);
-  const seedOrder = buildSeedOrder(bracketSize);
+function buildKnockoutTournament(groups, nextId) {
+  const totalPlayers = groups.reduce(
+    (total, group) => total + group.rankedPlayers.length,
+    0
+  );
   const matches = [];
+  const groupCount = groups.length;
 
-  let roundMatchIds = [];
+  const maxPlayersPerGroup = Math.max(
+    ...groups.map((group) => group.rankedPlayers.length),
+    0
+  );
 
-  for (let index = 0; index < seedOrder.length; index += 2) {
-    const matchNumber = index / 2 + 1;
-    const match = makeMatch(
-      nextId(),
-      1,
-      "",
-      `R1-M${matchNumber}`,
-      assignments[seedOrder[index]] || null,
-      assignments[seedOrder[index + 1]] || null
-    );
+  const maxTier =
+    groupCount === 2
+      ? Math.max(1, Math.ceil(maxPlayersPerGroup / 2) - 1)
+      : Math.max(1, maxPlayersPerGroup - 1);
 
-    matches.push(match);
-    roundMatchIds.push(match.id);
-  }
+  let currentFeeders = [null, null, null, null];
+  let currentRound = 1;
 
-  for (let round = 2; round <= totalRounds; round += 1) {
-    const nextRoundIds = [];
-
-    for (let index = 0; index < roundMatchIds.length; index += 2) {
-      const matchNumber = index / 2 + 1;
-      const label =
-        round === totalRounds ? "Final" : `R${round}-M${matchNumber}`;
+  if (maxTier === 1) {
+    // 8 players or fewer: Quarterfinals is Round 1
+    const quarterfinalMatches = [];
+    for (let slot = 0; slot < 4; slot += 1) {
+      const topSeed = getSeedForSlot(groups, groupCount, slot, 0);
+      const opponent = getSeedForSlot(groups, groupCount, slot, 1);
       const match = makeMatch(
         nextId(),
-        round,
-        "",
-        label,
-        { kind: "winner", matchId: roundMatchIds[index] },
-        { kind: "winner", matchId: roundMatchIds[index + 1] }
+        currentRound,
+        "Quarterfinals",
+        `QF-M${slot + 1}`,
+        topSeed,
+        opponent
       );
-
       matches.push(match);
-      nextRoundIds.push(match.id);
+      quarterfinalMatches.push(match);
+    }
+    currentFeeders = quarterfinalMatches.map((match) => ({
+      kind: "winner",
+      matchId: match.id
+    }));
+  } else {
+    // Round 1: Tier maxTier vs Tier (maxTier - 1)
+    let r1MatchNumber = 1;
+    const nextFeeders = [];
+
+    for (let slot = 0; slot < 4; slot += 1) {
+      const higherSeed = getSeedForSlot(groups, groupCount, slot, maxTier - 1);
+      const lowerSeed = getSeedForSlot(groups, groupCount, slot, maxTier);
+
+      if (higherSeed && lowerSeed) {
+        const match = makeMatch(
+          nextId(),
+          currentRound,
+          "Round 1",
+          `R1-M${r1MatchNumber++}`,
+          higherSeed,
+          lowerSeed
+        );
+        matches.push(match);
+        nextFeeders.push({ kind: "winner", matchId: match.id });
+      } else if (higherSeed) {
+        nextFeeders.push(higherSeed);
+      } else {
+        nextFeeders.push(null);
+      }
+    }
+    currentFeeders = nextFeeders;
+    currentRound += 1;
+
+    // Intermediate preliminary rounds up to the round before Quarterfinals
+    for (let tier = maxTier - 2; tier >= 1; tier -= 1) {
+      const nextRoundFeeders = [];
+      for (let slot = 0; slot < 4; slot += 1) {
+        const seededPlayer = getSeedForSlot(groups, groupCount, slot, tier);
+        const incomingFeeder = currentFeeders[slot];
+        const match = makeMatch(
+          nextId(),
+          currentRound,
+          `Round ${currentRound}`,
+          `R${currentRound}-M${slot + 1}`,
+          seededPlayer,
+          incomingFeeder
+        );
+        matches.push(match);
+        nextRoundFeeders.push({ kind: "winner", matchId: match.id });
+      }
+      currentFeeders = nextRoundFeeders;
+      currentRound += 1;
     }
 
-    roundMatchIds = nextRoundIds;
+    // Quarterfinals
+    const quarterfinalMatches = [];
+    for (let slot = 0; slot < 4; slot += 1) {
+      const qfSeed = getSeedForSlot(groups, groupCount, slot, 0);
+      const incomingFeeder = currentFeeders[slot];
+      const match = makeMatch(
+        nextId(),
+        currentRound,
+        "Quarterfinals",
+        `QF-M${slot + 1}`,
+        qfSeed,
+        incomingFeeder
+      );
+      matches.push(match);
+      quarterfinalMatches.push(match);
+    }
+    currentFeeders = quarterfinalMatches.map((match) => ({
+      kind: "winner",
+      matchId: match.id
+    }));
   }
+
+  // Semifinals
+  currentRound += 1;
+  const semifinalMatches = [];
+  for (let index = 0; index < 2; index += 1) {
+    const match = makeMatch(
+      nextId(),
+      currentRound,
+      "Semifinals",
+      `SF-M${index + 1}`,
+      currentFeeders[index * 2],
+      currentFeeders[index * 2 + 1]
+    );
+    matches.push(match);
+    semifinalMatches.push(match);
+  }
+
+  // Final & 3rd Place
+  currentRound += 1;
+  matches.push(
+    makeMatch(
+      nextId(),
+      currentRound,
+      "Final",
+      "Final",
+      { kind: "winner", matchId: semifinalMatches[0].id },
+      { kind: "winner", matchId: semifinalMatches[1].id }
+    ),
+    makeMatch(
+      nextId(),
+      currentRound,
+      "Final",
+      "3rd Place",
+      { kind: "loser", matchId: semifinalMatches[0].id },
+      { kind: "loser", matchId: semifinalMatches[1].id }
+    )
+  );
 
   return {
     groups,
-    matches: applyRoundNames(matches).matches,
-    bracketSize,
+    matches,
+    bracketSize: nextPowerOfTwo(Math.max(totalPlayers, 8)),
     totalPlayers,
-    totalRounds,
-    byeCount
-  };
-}
-
-function buildWinnerBracket(sources, startRound, nextId, labelPrefix) {
-  const matches = [];
-  let round = startRound;
-  let currentSources = [...sources];
-
-  while (currentSources.length > 1) {
-    const nextSources = [];
-
-    for (let index = 0; index < currentSources.length; index += 2) {
-      const match = makeMatch(
-        nextId(),
-        round,
-        "",
-        `${labelPrefix}-R${round}-M${index / 2 + 1}`,
-        currentSources[index] || null,
-        currentSources[index + 1] || null
-      );
-
-      matches.push(match);
-      nextSources.push({ kind: "winner", matchId: match.id });
-    }
-
-    currentSources = nextSources;
-    round += 1;
-  }
-
-  return {
-    matches,
-    winnerSource: currentSources[0] || null,
-    endRound: Math.max(startRound - 1, round - 1)
-  };
-}
-
-function buildPairBranchTournament(
-  groups,
-  homeGroupIndex,
-  awayGroupIndex,
-  nextId,
-  branchIndex
-) {
-  const playersPerGroup = groups[homeGroupIndex]?.rankedPlayers.length || 0;
-  const anchorStartRank = playersPerGroup <= 4 ? 2 : 3;
-  const matches = [];
-  let feederSources = [];
-
-  for (let rank = playersPerGroup; rank > anchorStartRank; rank -= 1) {
-    const match = makeMatch(
-      nextId(),
-      1,
-      "",
-      `B${branchIndex + 1}-R1-${rank}`,
-      { kind: "player", groupIndex: homeGroupIndex, rank },
-      { kind: "player", groupIndex: awayGroupIndex, rank }
-    );
-
-    matches.push(match);
-    feederSources.push({ kind: "winner", matchId: match.id });
-  }
-
-  if (feederSources.length === 1) {
-    feederSources = [feederSources[0], null];
-  }
-
-  let round = 2;
-
-  while (feederSources.length > 2) {
-    const nextSources = [];
-
-    for (let index = 0; index < feederSources.length; index += 2) {
-      const match = makeMatch(
-        nextId(),
-        round,
-        "",
-        `B${branchIndex + 1}-Merge-${index / 2 + 1}`,
-        feederSources[index],
-        feederSources[index + 1] || null
-      );
-
-      matches.push(match);
-      nextSources.push({ kind: "winner", matchId: match.id });
-    }
-
-    feederSources = nextSources;
-    round += 1;
-  }
-
-  let branchSources = feederSources;
-
-  for (let rank = anchorStartRank; rank >= 1; rank -= 1) {
-    branchSources = branchSources.map((source, sourceIndex) => {
-      const groupIndex = sourceIndex === 0 ? homeGroupIndex : awayGroupIndex;
-      const match = makeMatch(
-        nextId(),
-        round,
-        "",
-        `B${branchIndex + 1}-${groupName(groupIndex)}-${rank}`,
-        source,
-        { kind: "player", groupIndex, rank }
-      );
-
-      matches.push(match);
-      return { kind: "winner", matchId: match.id };
-    });
-
-    round += 1;
-  }
-
-  const final = makeMatch(
-    nextId(),
-    round,
-    "",
-    `B${branchIndex + 1}-Final`,
-    branchSources[0],
-    branchSources[1]
-  );
-
-  matches.push(final);
-
-  return {
-    matches,
-    winnerSource: { kind: "winner", matchId: final.id },
-    endRound: round
+    totalRounds: currentRound,
+    byeCount: matches.filter((match) => !match.homeSource || !match.awaySource)
+      .length
   };
 }
 
 function generateTournament(groups) {
-  const totalPlayers = groups.length * (groups[0]?.rankedPlayers.length || 0);
+  const totalPlayers = groups.reduce(
+    (total, group) => total + group.rankedPlayers.length,
+    0
+  );
   if (totalPlayers < 2) {
     return {
       groups,
@@ -401,53 +304,12 @@ function generateTournament(groups) {
 
   let idCounter = 1;
   const nextId = () => `M${idCounter++}`;
-
-  if (groups.length % 2 !== 0) {
-    return generateSeededTournament(groups, nextId);
-  }
-
-  const branchBuilds = [];
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 2) {
-    branchBuilds.push(
-      buildPairBranchTournament(
-        groups,
-        groupIndex,
-        groupIndex + 1,
-        nextId,
-        groupIndex / 2
-      )
-    );
-  }
-
-  const branchWinners = branchBuilds.map((build) => build.winnerSource);
-  const initialMatches = branchBuilds.flatMap((build) => build.matches);
-  const overallStartRound =
-    Math.max(...branchBuilds.map((build) => build.endRound), 0) + 1;
-  const finalsBuild =
-    branchWinners.length > 1
-      ? buildWinnerBracket(branchWinners, overallStartRound, nextId, "KO")
-      : {
-          matches: [],
-          endRound: Math.max(...branchBuilds.map((build) => build.endRound), 0)
-        };
-  const allMatches = [...initialMatches, ...finalsBuild.matches];
-  const named = applyRoundNames(allMatches);
-
-  return {
-    groups,
-    matches: named.matches,
-    bracketSize: nextPowerOfTwo(totalPlayers),
-    totalPlayers,
-    totalRounds: named.totalRounds,
-    byeCount: allMatches.filter(
-      (match) => !match.homeSource || !match.awaySource
-    ).length
-  };
+  return buildKnockoutTournament(groups, nextId);
 }
 
 function resolveLegacySource(source, ref) {
   if (!ref) return "";
-  if (source.side === "loser")
+  if (source.kind === "loser" || source.side === "loser")
     return ref.winner === ref.home ? ref.away : ref.home;
   return ref.winner || "";
 }
@@ -485,18 +347,27 @@ function clearMatchResult(match) {
   match.winner = "";
 }
 
-function applyAutomaticWinner(match) {
-  if (match.home && !match.away) {
+function isPendingSource(source, resolvedName) {
+  return Boolean(
+    !resolvedName &&
+    source &&
+    typeof source === "object" &&
+    (source.kind === "winner" || source.kind === "loser")
+  );
+}
+
+function applyAutomaticWinner(match, homePending, awayPending) {
+  if (match.home && !match.away && !awayPending) {
     match.winner = match.home;
     return true;
   }
 
-  if (!match.home && match.away) {
+  if (!match.home && match.away && !homePending) {
     match.winner = match.away;
     return true;
   }
 
-  if (!match.home && !match.away) {
+  if (!match.home && !match.away && !homePending && !awayPending) {
     match.winner = "";
     return true;
   }
@@ -526,6 +397,8 @@ export function propagateWinners(state) {
 
     current.home = resolveSource(current.homeSource, byId, state.groups);
     current.away = resolveSource(current.awaySource, byId, state.groups);
+    const homePending = isPendingSource(current.homeSource, current.home);
+    const awayPending = isPendingSource(current.awaySource, current.away);
 
     const participantsChanged =
       previousHome !== current.home || previousAway !== current.away;
@@ -534,7 +407,7 @@ export function propagateWinners(state) {
       clearMatchResult(current);
     }
 
-    if (applyAutomaticWinner(current)) {
+    if (applyAutomaticWinner(current, homePending, awayPending)) {
       continue;
     }
 
@@ -750,10 +623,9 @@ export default function Admin() {
   return (
     <div className="container">
       <p className="intro">
-        The bracket now uses a seeded knockout model: better group-stage
-        placements receive later entry via byes, while the lowest remaining
-        placements are paired first, usually against the same finishing place
-        from another group.
+        The bracket uses ranked group entries in a knockout format with
+        preliminary rounds, quarterfinals, semifinals, a final, and a 3rd place
+        match.
       </p>
 
       <div className="info-panel">
@@ -870,7 +742,8 @@ export default function Admin() {
                   </h4>
                   {groupedMatches[round].map((match) => {
                     const isBye = Boolean(
-                      (match.home && !match.away) || (!match.home && match.away)
+                      (match.home && !match.away && !match.awaySource) ||
+                      (!match.home && match.away && !match.homeSource)
                     );
 
                     return (
