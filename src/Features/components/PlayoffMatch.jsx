@@ -41,11 +41,11 @@ export default function PlayoffMatch({
         </div>
         <input
           type="number"
-          value={match.scoreHome ?? ""}
+          min={0}
+          value={match.scoreHome ?? 0}
           disabled={scoreInputsDisabled}
           readOnly={readOnly}
           onChange={(event) => onScoreHomeChange?.(event.target.value)}
-          placeholder="0"
         />
         <button
           type="button"
@@ -76,11 +76,11 @@ export default function PlayoffMatch({
         </div>
         <input
           type="number"
-          value={match.scoreAway ?? ""}
+          min={0}
+          value={match.scoreAway ?? 0}
           disabled={scoreInputsDisabled}
           readOnly={readOnly}
           onChange={(event) => onScoreAwayChange?.(event.target.value)}
-          placeholder="0"
         />
         <button
           type="button"

@@ -66,10 +66,6 @@ body {
   align-items: center;
 }
 
-.secondary-actions {
-  margin-top: 0;
-}
-
 .messages {
   display: flex;
   flex-wrap: wrap;
@@ -228,23 +224,6 @@ body {
   border: 2px solid #36b37e;
   font-weight: bold;
   background: #e3fcef;
-}
-
-.png-preview {
-  margin-top: 18px;
-  background: #fff;
-  border: 1px solid #dfe1e6;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.png-preview img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  border: 1px solid #ebecf0;
-  border-radius: 8px;
-  background: #fff;
 }
 
 button,

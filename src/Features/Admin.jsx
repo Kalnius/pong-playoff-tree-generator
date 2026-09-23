@@ -6,13 +6,6 @@ function groupName(index) {
   return String.fromCodePoint(65 + index);
 }
 
-function makeInitialGroups(groupCount, playersPerGroup) {
-  return Array.from({ length: groupCount }, (_, i) => ({
-    id: groupName(i),
-    rankedPlayers: Array.from({ length: playersPerGroup }, () => "")
-  }));
-}
-
 function resizeGroups(existingGroups, groupCount, playersPerGroup) {
   return Array.from({ length: groupCount }, (_, groupIndex) => ({
     id: groupName(groupIndex),
@@ -24,17 +17,18 @@ function resizeGroups(existingGroups, groupCount, playersPerGroup) {
   }));
 }
 
+function makeInitialGroups(groupCount, playersPerGroup) {
+  return resizeGroups([], groupCount, playersPerGroup);
+}
+
 function normalizeScore(value) {
-  if (value === "" || value === null || value === undefined) return "";
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? String(parsed) : "";
+  return Math.max(0, Number.isFinite(parsed) ? parsed : 0);
 }
 
 function autoWinnerForMatch(match, scoreHome, scoreAway) {
   const homeScore = Number(scoreHome);
   const awayScore = Number(scoreAway);
-  if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore))
-    return match.winner || "";
   if (homeScore === awayScore) return "";
   return homeScore > awayScore ? match.home : match.away;
 }
@@ -55,8 +49,8 @@ function makeMatch(id, round, roundName, label, homeSource, awaySource) {
     awaySource,
     home: "",
     away: "",
-    scoreHome: "",
-    scoreAway: "",
+    scoreHome: 0,
+    scoreAway: 0,
     winner: "",
     technicalLoss: ""
   };
@@ -309,21 +303,6 @@ function generateTournament(groups) {
   return buildKnockoutTournament(groups, nextId);
 }
 
-function resolveLegacySource(source, ref) {
-  if (!ref) return "";
-  if (source.kind === "loser" || source.side === "loser")
-    return ref.winner === ref.home ? ref.away : ref.home;
-  return ref.winner || "";
-}
-
-function resolveWinnerOrLoserSource(source, byId) {
-  const ref = byId[source.matchId];
-  if (!ref) return "";
-  return source.kind === "winner"
-    ? ref.winner || ""
-    : resolveLegacySource(source, ref);
-}
-
 function resolveSource(source, byId, groups) {
   if (!source) return "";
   if (typeof source === "string") return source;
@@ -332,20 +311,23 @@ function resolveSource(source, byId, groups) {
     return getPlayerName(groups, source.groupIndex, source.rank);
   }
 
-  if (source.kind === "winner" || source.kind === "loser") {
-    return resolveWinnerOrLoserSource(source, byId);
+  const ref = byId[source.matchId];
+  if (!ref?.winner) return "";
+
+  if (source.kind === "winner") {
+    return ref.winner;
   }
 
-  if (source.matchId && source.side) {
-    return resolveLegacySource(source, byId[source.matchId]);
+  if (source.kind === "loser" || source.side === "loser") {
+    return ref.winner === ref.home ? ref.away : ref.home;
   }
 
   return "";
 }
 
 function clearMatchResult(match) {
-  match.scoreHome = "";
-  match.scoreAway = "";
+  match.scoreHome = 0;
+  match.scoreAway = 0;
   match.winner = "";
   match.technicalLoss = "";
 }
@@ -361,11 +343,15 @@ function isPendingSource(source, resolvedName) {
 
 function applyAutomaticWinner(match, homePending, awayPending) {
   if (match.technicalLoss === "home") {
+    match.scoreHome = 0;
+    match.scoreAway = 0;
     match.winner = match.away || "";
     return true;
   }
 
   if (match.technicalLoss === "away") {
+    match.scoreHome = 0;
+    match.scoreAway = 0;
     match.winner = match.home || "";
     return true;
   }
@@ -385,17 +371,8 @@ function applyAutomaticWinner(match, homePending, awayPending) {
     return true;
   }
 
-  const autoWinner = autoWinnerForMatch(
-    match,
-    match.scoreHome,
-    match.scoreAway
-  );
-  if (autoWinner) {
-    match.winner = autoWinner;
-    return true;
-  }
-
-  return false;
+  match.winner = autoWinnerForMatch(match, match.scoreHome, match.scoreAway);
+  return true;
 }
 
 export function propagateWinners(state) {
@@ -463,7 +440,17 @@ function parseState(data) {
     playersPerGroup
   );
   const tournament = data.tournament
-    ? propagateWinners({ ...data.tournament, groups })
+    ? propagateWinners({
+        ...data.tournament,
+        groups,
+        matches: Array.isArray(data.tournament.matches)
+          ? data.tournament.matches.map((match) => ({
+              ...match,
+              scoreHome: normalizeScore(match.scoreHome),
+              scoreAway: normalizeScore(match.scoreAway)
+            }))
+          : []
+      })
     : null;
 
   return { groupCount, playersPerGroup, groups, tournament };
@@ -552,7 +539,7 @@ export default function Admin() {
 
   useEffect(() => {
     saveData(payload);
-  }, [payload, tournament]);
+  }, [payload]);
 
   const updatePlayer = (groupIndex, playerIndex, value) => {
     setGroups((current) => {
@@ -574,13 +561,6 @@ export default function Admin() {
     if (!match) return;
     match.scoreHome = normalizeScore(scoreHome);
     match.scoreAway = normalizeScore(scoreAway);
-    if (!match.technicalLoss) {
-      match.winner = autoWinnerForMatch(
-        match,
-        match.scoreHome,
-        match.scoreAway
-      );
-    }
     setTournament(propagateWinners({ ...copy, groups }));
   };
 
@@ -589,17 +569,7 @@ export default function Admin() {
     const copy = structuredClone(tournament);
     const match = copy.matches.find((candidate) => candidate.id === matchId);
     if (!match) return;
-    if (match.technicalLoss === side) {
-      match.technicalLoss = "";
-      match.winner = autoWinnerForMatch(
-        match,
-        match.scoreHome,
-        match.scoreAway
-      );
-    } else {
-      match.technicalLoss = side;
-      match.winner = side === "home" ? match.away : match.home;
-    }
+    match.technicalLoss = match.technicalLoss === side ? "" : side;
     setTournament(propagateWinners({ ...copy, groups }));
   };
 

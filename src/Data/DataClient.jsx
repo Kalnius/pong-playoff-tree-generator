@@ -114,16 +114,10 @@ export function saveData(data, options = {}) {
   }
 
   try {
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.delete("state");
-    const hashParams = getHashParams();
-    if (data !== undefined && data !== null) {
-      hashParams.set("state", encodeBase64Url(JSON.stringify(data)));
-    } else {
-      hashParams.delete("state");
+    const nextUrl = buildStateUrl(data);
+    if (nextUrl) {
+      window.history.replaceState(null, "", nextUrl);
     }
-    nextUrl.hash = hashParams.toString();
-    window.history.replaceState(null, "", nextUrl);
   } catch {
     // ignore history sync errors
   }
