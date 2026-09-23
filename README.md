@@ -7,6 +7,7 @@ This project is now a standalone static React app (no Forge runtime).
 It lets users:
 
 - enter ranked group standings
+- set a separate player count for each group
 - generate a playoff tree
 - enter winners/scores
 - auto-advance winners through rounds
@@ -21,12 +22,16 @@ The app now prefers a **progressive pair-ladder** model for even group counts:
 - groups are paired as `A vs B`, `C vs D`, and so on
 - the lower placements from each pair of groups start first
 - higher placements from those same groups join in later rounds
+- groups may have different player counts; a seed without a counterpart advances
+  until the next stage with an available opponent
 - if the lower half is too large to feed directly into the next tier, extra merge rounds are inserted before the next higher placements join
 
 Examples:
 
 - `2 groups x 5 players`: `5th vs 5th`, `4th vs 4th`, then winners face `3rd`, then `2nd`, then `1st`, then the pair final
 - `2 groups x 7 players`: `7th/6th/5th/4th` start in round 1, then merge rounds reduce them before they climb into the `3rd`, `2nd`, and `1st` players
+- `7 players vs 4 players`: unmatched lower seeds from the larger group move
+  forward until they reach the next populated stage
 
 For odd group counts, the app falls back to a generic seeded knockout so every configuration still works.
 

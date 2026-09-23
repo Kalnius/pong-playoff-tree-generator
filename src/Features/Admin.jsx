@@ -6,11 +6,24 @@ function groupName(index) {
   return String.fromCodePoint(65 + index);
 }
 
-function resizeGroups(existingGroups, groupCount, playersPerGroup) {
+function normalizePlayerCount(value, fallback = 4) {
+  const parsed = Number(value);
+  return Math.min(
+    16,
+    Math.max(1, Number.isFinite(parsed) ? Math.floor(parsed) : fallback)
+  );
+}
+
+function resizeGroups(existingGroups, groupCount, fallbackPlayerCount = 4) {
   return Array.from({ length: groupCount }, (_, groupIndex) => ({
     id: groupName(groupIndex),
     rankedPlayers: Array.from(
-      { length: playersPerGroup },
+      {
+        length: normalizePlayerCount(
+          existingGroups?.[groupIndex]?.rankedPlayers?.length,
+          fallbackPlayerCount
+        )
+      },
       (_, playerIndex) =>
         existingGroups?.[groupIndex]?.rankedPlayers?.[playerIndex] || ""
     )
@@ -125,6 +138,7 @@ function buildKnockoutTournament(groups, nextId) {
     (total, group) => total + group.rankedPlayers.length,
     0
   );
+  const bracketSize = nextPowerOfTwo(Math.max(totalPlayers, 8));
   const matches = [];
   const groupCount = groups.length;
 
@@ -143,29 +157,31 @@ function buildKnockoutTournament(groups, nextId) {
 
   if (maxTier === 1) {
     // 8 players or fewer: Quarterfinals is Round 1
-    const quarterfinalMatches = [];
+    const quarterfinalFeeders = [];
     for (let slot = 0; slot < 4; slot += 1) {
       const topSeed = getSeedForSlot(groups, groupCount, slot, 0);
       const opponent = getSeedForSlot(groups, groupCount, slot, 1);
-      const match = makeMatch(
-        nextId(),
-        currentRound,
-        "Quarterfinals",
-        `QF-M${slot + 1}`,
-        topSeed,
-        opponent
-      );
-      matches.push(match);
-      quarterfinalMatches.push(match);
+      if (topSeed && opponent) {
+        const match = makeMatch(
+          nextId(),
+          currentRound,
+          "Quarterfinals",
+          `QF-M${slot + 1}`,
+          topSeed,
+          opponent
+        );
+        matches.push(match);
+        quarterfinalFeeders.push({ kind: "winner", matchId: match.id });
+      } else {
+        quarterfinalFeeders.push(topSeed || opponent);
+      }
     }
-    currentFeeders = quarterfinalMatches.map((match) => ({
-      kind: "winner",
-      matchId: match.id
-    }));
+    currentFeeders = quarterfinalFeeders;
   } else {
     // Round 1: Tier maxTier vs Tier (maxTier - 1)
     let r1MatchNumber = 1;
     const nextFeeders = [];
+    const roundStartIndex = matches.length;
 
     for (let slot = 0; slot < 4; slot += 1) {
       const higherSeed = getSeedForSlot(groups, groupCount, slot, maxTier - 1);
@@ -182,56 +198,64 @@ function buildKnockoutTournament(groups, nextId) {
         );
         matches.push(match);
         nextFeeders.push({ kind: "winner", matchId: match.id });
-      } else if (higherSeed) {
-        nextFeeders.push(higherSeed);
       } else {
-        nextFeeders.push(null);
+        nextFeeders.push(higherSeed || lowerSeed);
       }
     }
     currentFeeders = nextFeeders;
-    currentRound += 1;
+    if (matches.length > roundStartIndex) {
+      currentRound += 1;
+    }
 
     // Intermediate preliminary rounds up to the round before Quarterfinals
     for (let tier = maxTier - 2; tier >= 1; tier -= 1) {
       const nextRoundFeeders = [];
+      const roundStartIndex = matches.length;
       for (let slot = 0; slot < 4; slot += 1) {
         const seededPlayer = getSeedForSlot(groups, groupCount, slot, tier);
         const incomingFeeder = currentFeeders[slot];
-        const match = makeMatch(
-          nextId(),
-          currentRound,
-          `Round ${currentRound}`,
-          `R${currentRound}-M${slot + 1}`,
-          seededPlayer,
-          incomingFeeder
-        );
-        matches.push(match);
-        nextRoundFeeders.push({ kind: "winner", matchId: match.id });
+        if (seededPlayer && incomingFeeder) {
+          const match = makeMatch(
+            nextId(),
+            currentRound,
+            `Round ${currentRound}`,
+            `R${currentRound}-M${slot + 1}`,
+            seededPlayer,
+            incomingFeeder
+          );
+          matches.push(match);
+          nextRoundFeeders.push({ kind: "winner", matchId: match.id });
+        } else {
+          nextRoundFeeders.push(seededPlayer || incomingFeeder);
+        }
       }
       currentFeeders = nextRoundFeeders;
-      currentRound += 1;
+      if (matches.length > roundStartIndex) {
+        currentRound += 1;
+      }
     }
 
     // Quarterfinals
-    const quarterfinalMatches = [];
+    const quarterfinalFeeders = [];
     for (let slot = 0; slot < 4; slot += 1) {
       const qfSeed = getSeedForSlot(groups, groupCount, slot, 0);
       const incomingFeeder = currentFeeders[slot];
-      const match = makeMatch(
-        nextId(),
-        currentRound,
-        "Quarterfinals",
-        `QF-M${slot + 1}`,
-        qfSeed,
-        incomingFeeder
-      );
-      matches.push(match);
-      quarterfinalMatches.push(match);
+      if (qfSeed && incomingFeeder) {
+        const match = makeMatch(
+          nextId(),
+          currentRound,
+          "Quarterfinals",
+          `QF-M${slot + 1}`,
+          qfSeed,
+          incomingFeeder
+        );
+        matches.push(match);
+        quarterfinalFeeders.push({ kind: "winner", matchId: match.id });
+      } else {
+        quarterfinalFeeders.push(qfSeed || incomingFeeder);
+      }
     }
-    currentFeeders = quarterfinalMatches.map((match) => ({
-      kind: "winner",
-      matchId: match.id
-    }));
+    currentFeeders = quarterfinalFeeders;
   }
 
   // Semifinals
@@ -274,11 +298,10 @@ function buildKnockoutTournament(groups, nextId) {
   return {
     groups,
     matches,
-    bracketSize: nextPowerOfTwo(Math.max(totalPlayers, 8)),
+    bracketSize,
     totalPlayers,
     totalRounds: currentRound,
-    byeCount: matches.filter((match) => !match.homeSource || !match.awaySource)
-      .length
+    byeCount: bracketSize - totalPlayers
   };
 }
 
@@ -419,7 +442,6 @@ export function propagateWinners(state) {
 export function getDefaultState(groupCount = 2, playersPerGroup = 4) {
   return {
     groupCount,
-    playersPerGroup,
     groups: makeInitialGroups(groupCount, playersPerGroup),
     tournament: null
   };
@@ -428,16 +450,13 @@ export function getDefaultState(groupCount = 2, playersPerGroup = 4) {
 function parseState(data) {
   if (!data || typeof data !== "object") return null;
   const groupCount = Number(data.groupCount) === 4 ? 4 : 2;
-  const playersPerGroup = Math.min(
-    16,
-    Math.max(4, Number(data.playersPerGroup) || 4)
-  );
+  const fallbackPlayerCount = normalizePlayerCount(data.playersPerGroup);
   const groups = resizeGroups(
     Array.isArray(data.groups)
       ? data.groups
-      : makeInitialGroups(groupCount, playersPerGroup),
+      : makeInitialGroups(groupCount, fallbackPlayerCount),
     groupCount,
-    playersPerGroup
+    fallbackPlayerCount
   );
   const tournament = data.tournament
     ? propagateWinners({
@@ -453,7 +472,7 @@ function parseState(data) {
       })
     : null;
 
-  return { groupCount, playersPerGroup, groups, tournament };
+  return { groupCount, groups, tournament };
 }
 
 async function copyText(value) {
@@ -480,9 +499,6 @@ export default function Admin() {
   }, []);
 
   const [groupCount, setGroupCount] = useState(initialData.groupCount);
-  const [playersPerGroup, setPlayersPerGroup] = useState(
-    initialData.playersPerGroup
-  );
   const [groups, setGroups] = useState(initialData.groups);
   const [tournament, setTournament] = useState(initialData.tournament);
   const [saveMsg, setSaveMsg] = useState("");
@@ -491,8 +507,8 @@ export default function Admin() {
   const fileInputRef = useRef(null);
 
   const payload = useMemo(
-    () => ({ groupCount, playersPerGroup, groups, tournament }),
-    [groupCount, playersPerGroup, groups, tournament]
+    () => ({ groupCount, groups, tournament }),
+    [groupCount, groups, tournament]
   );
 
   const shareUrl = useMemo(() => buildStateUrl(payload), [payload]);
@@ -515,7 +531,6 @@ export default function Admin() {
     const next = parseState(data);
     if (!next) return;
     setGroupCount(next.groupCount);
-    setPlayersPerGroup(next.playersPerGroup);
     setGroups(next.groups);
     setTournament(next.tournament);
   };
@@ -526,9 +541,9 @@ export default function Admin() {
       return;
     }
 
-    setGroups((current) => resizeGroups(current, groupCount, playersPerGroup));
+    setGroups((current) => resizeGroups(current, groupCount));
     setTournament(null);
-  }, [groupCount, playersPerGroup]);
+  }, [groupCount]);
 
   useEffect(() => {
     if (!tournament) return;
@@ -547,6 +562,24 @@ export default function Admin() {
       copy[groupIndex].rankedPlayers[playerIndex] = value;
       return copy;
     });
+  };
+
+  const updateGroupPlayerCount = (groupIndex, value) => {
+    const playerCount = normalizePlayerCount(value);
+    setGroups((current) =>
+      current.map((group, index) =>
+        index === groupIndex
+          ? {
+              ...group,
+              rankedPlayers: Array.from(
+                { length: playerCount },
+                (_, playerIndex) => group.rankedPlayers[playerIndex] || ""
+              )
+            }
+          : group
+      )
+    );
+    setTournament(null);
   };
 
   const onGenerate = () => {
@@ -642,20 +675,6 @@ export default function Admin() {
             <option value={4}>4</option>
           </select>
         </label>
-        <label>
-          Players per group{" "}
-          <input
-            type="number"
-            min={4}
-            max={16}
-            value={playersPerGroup}
-            onChange={(event) =>
-              setPlayersPerGroup(
-                Math.min(16, Math.max(4, Number(event.target.value) || 4))
-              )
-            }
-          />
-        </label>
       </div>
 
       <>
@@ -664,6 +683,18 @@ export default function Admin() {
           {groups.map((group, groupIndex) => (
             <div className="group" key={group.id}>
               <h4>Group {group.id}</h4>
+              <label className="group-player-count">
+                Player count{" "}
+                <input
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={group.rankedPlayers.length}
+                  onChange={(event) =>
+                    updateGroupPlayerCount(groupIndex, event.target.value)
+                  }
+                />
+              </label>
               {group.rankedPlayers.map((player, playerIndex) => (
                 <div className="row" key={`${group.id}-${playerIndex}`}>
                   <span>{playerIndex + 1}.</span>

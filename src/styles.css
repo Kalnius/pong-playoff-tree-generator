@@ -52,6 +52,19 @@ body {
   min-width: 220px;
 }
 
+.group-player-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.group-player-count input {
+  width: 56px;
+  padding: 4px;
+}
+
 .row input,
 .config input {
   width: 120px;
