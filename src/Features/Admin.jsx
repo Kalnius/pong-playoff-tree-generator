@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildStateUrl, getData, saveData } from "../Data/DataClient";
-import PlayoffMatch from "./components/PlayoffMatch";
+import PlayoffRounds from "./components/PlayoffRounds";
 
 function groupName(index) {
   return String.fromCodePoint(65 + index);
@@ -513,15 +513,6 @@ export default function Admin() {
 
   const shareUrl = useMemo(() => buildStateUrl(payload), [payload]);
 
-  const groupedMatches = useMemo(() => {
-    if (!tournament) return {};
-    return tournament.matches.reduce((acc, match) => {
-      acc[match.round] = acc[match.round] || [];
-      acc[match.round].push(match);
-      return acc;
-    }, {});
-  }, [tournament]);
-
   const setTemporaryMessage = (setter, value) => {
     setter(value);
     window.setTimeout(() => setter(""), 1800);
@@ -604,6 +595,17 @@ export default function Admin() {
     if (!match) return;
     match.technicalLoss = match.technicalLoss === side ? "" : side;
     setTournament(propagateWinners({ ...copy, groups }));
+  };
+
+  const clearAllResults = () => {
+    if (!tournament) return;
+    const copy = structuredClone(tournament);
+    copy.matches.forEach(clearMatchResult);
+    setTournament(propagateWinners({ ...copy, groups }));
+  };
+
+  const clearPlayoffTree = () => {
+    setTournament(null);
   };
 
   const onSave = () => {
@@ -757,34 +759,20 @@ export default function Admin() {
             </span>
           </div>
 
-          <h3>Playoff</h3>
-          <div className="rounds">
-            {Object.keys(groupedMatches)
-              .map(Number)
-              .sort((a, b) => a - b)
-              .map((round) => (
-                <div className="round" key={round}>
-                  <h4>
-                    {groupedMatches[round][0]?.roundName || `Round ${round}`}
-                  </h4>
-                  {groupedMatches[round].map((match) => (
-                    <PlayoffMatch
-                      key={match.id}
-                      match={match}
-                      onTechnicalLoss={(side) =>
-                        handleTechnicalLoss(match.id, side)
-                      }
-                      onScoreHomeChange={(scoreHome) =>
-                        updateMatchScores(match.id, scoreHome, match.scoreAway)
-                      }
-                      onScoreAwayChange={(scoreAway) =>
-                        updateMatchScores(match.id, match.scoreHome, scoreAway)
-                      }
-                    />
-                  ))}
-                </div>
-              ))}
+          <div className="playoff-heading">
+            <h3>Playoff</h3>
+            <div className="actions playoff-actions">
+              <button onClick={clearAllResults}>Clear all results</button>
+              <button className="danger-button" onClick={clearPlayoffTree}>
+                Clear playoff tree
+              </button>
+            </div>
           </div>
+          <PlayoffRounds
+            tournament={tournament}
+            onTechnicalLoss={handleTechnicalLoss}
+            onScoreChange={updateMatchScores}
+          />
         </>
       )}
     </div>

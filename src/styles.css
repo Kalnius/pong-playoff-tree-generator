@@ -120,6 +120,24 @@ body {
   border-radius: 8px;
 }
 
+.playoff-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.playoff-heading h3,
+.playoff-actions {
+  margin: 0 0 10px;
+}
+
+.danger-button {
+  color: #ae2a19;
+  border-color: #e2483d;
+}
+
 .rounds {
   display: flex;
   gap: 12px;
@@ -134,13 +152,31 @@ body {
   border: 1px solid #dfe1e6;
   border-radius: 8px;
   padding: 10px;
+  box-sizing: border-box;
+}
+
+.round > h4 {
+  min-height: 38px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+}
+
+.round-matches {
+  display: grid;
+  grid-template-rows: repeat(8, 72px);
+  height: 576px;
+}
+
+.match-position {
+  align-self: center;
 }
 
 .match {
   border: 1px solid #ebecf0;
   border-radius: 6px;
   padding: 8px;
-  margin-bottom: 8px;
+  margin: 0;
   background: #fff;
 }
 
