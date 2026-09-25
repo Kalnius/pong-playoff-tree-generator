@@ -1,8 +1,44 @@
-import React, { useMemo } from "react";
+import React, {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import PlayoffMatch from "./PlayoffMatch";
 
 function sourceMatchId(source) {
   return source && typeof source === "object" ? source.matchId : null;
+}
+
+function getWinnerConnections(matches) {
+  const matchById = new Map(matches.map((match) => [match.id, match]));
+  const connections = [];
+
+  matches.forEach((match) => {
+    [
+      ["home", match.homeSource],
+      ["away", match.awaySource]
+    ].forEach(([toSide, source]) => {
+      if (!source || source.kind !== "winner") {
+        return;
+      }
+      const fromMatch = matchById.get(sourceMatchId(source));
+      if (!fromMatch || !fromMatch.winner) {
+        return;
+      }
+      const fromSide = fromMatch.winner === fromMatch.home ? "home" : "away";
+      connections.push({
+        key: `${fromMatch.id}:${fromSide}->${match.id}:${toSide}`,
+        fromMatchId: fromMatch.id,
+        fromSide,
+        toMatchId: match.id,
+        toSide
+      });
+    });
+  });
+
+  return connections;
 }
 
 function getRoundLayout(matches) {
@@ -87,8 +123,96 @@ export default function PlayoffRounds({
     [tournament.matches]
   );
 
+  const containerRef = useRef(null);
+  const rowRefsMap = useRef(new Map());
+  const [connectorPaths, setConnectorPaths] = useState([]);
+  const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 });
+
+  const registerRowRef = useCallback((matchId, side, element) => {
+    const key = `${matchId}:${side}`;
+    if (element) {
+      rowRefsMap.current.set(key, element);
+    } else {
+      rowRefsMap.current.delete(key);
+    }
+  }, []);
+
+  const recomputeConnectorPaths = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const offsetX = container.scrollLeft - containerRect.left;
+    const offsetY = container.scrollTop - containerRect.top;
+
+    const nextPaths = getWinnerConnections(tournament.matches)
+      .map((connection) => {
+        const fromEl = rowRefsMap.current.get(
+          `${connection.fromMatchId}:${connection.fromSide}`
+        );
+        const toEl = rowRefsMap.current.get(
+          `${connection.toMatchId}:${connection.toSide}`
+        );
+        if (!fromEl || !toEl) {
+          return null;
+        }
+
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+
+        const x1 = fromRect.right + offsetX;
+        const y1 = fromRect.top + fromRect.height / 2 + offsetY;
+        const x2 = toRect.left + offsetX;
+        const y2 = toRect.top + toRect.height / 2 + offsetY;
+        const midX = x1 + (x2 - x1) / 2;
+
+        return {
+          key: connection.key,
+          d: `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
+        };
+      })
+      .filter(Boolean);
+
+    setConnectorPaths(nextPaths);
+    setOverlaySize({
+      width: container.scrollWidth,
+      height: container.scrollHeight
+    });
+  }, [tournament.matches]);
+
+  useLayoutEffect(() => {
+    recomputeConnectorPaths();
+  }, [recomputeConnectorPaths]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const resizeObserver = new ResizeObserver(() => recomputeConnectorPaths());
+    resizeObserver.observe(container);
+    window.addEventListener("resize", recomputeConnectorPaths);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", recomputeConnectorPaths);
+    };
+  }, [recomputeConnectorPaths]);
+
   return (
-    <div className="rounds">
+    <div className="rounds" ref={containerRef}>
+      <svg
+        className="connector-overlay"
+        width={overlaySize.width}
+        height={overlaySize.height}
+      >
+        {connectorPaths.map((path) => (
+          <path key={path.key} d={path.d} />
+        ))}
+      </svg>
       {Object.keys(groupedMatches)
         .map(Number)
         .sort((a, b) => a - b)
@@ -105,6 +229,12 @@ export default function PlayoffRounds({
                   <PlayoffMatch
                     match={match}
                     readOnly={readOnly}
+                    homeRowRef={(element) =>
+                      registerRowRef(match.id, "home", element)
+                    }
+                    awayRowRef={(element) =>
+                      registerRowRef(match.id, "away", element)
+                    }
                     onTechnicalLoss={(side) =>
                       onTechnicalLoss?.(match.id, side)
                     }

@@ -144,6 +144,21 @@ body {
   overflow-x: auto;
   align-items: flex-start;
   padding-bottom: 8px;
+  position: relative;
+}
+
+.connector-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.connector-overlay path {
+  fill: none;
+  stroke: #36b37e;
+  stroke-width: 2;
 }
 
 .round {
@@ -195,6 +210,9 @@ body {
   gap: 6px;
   margin-bottom: 6px;
   align-items: center;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 6px;
 }
 
 .player-name {
@@ -270,9 +288,12 @@ body {
 }
 
 .winner {
-  border: 2px solid #36b37e;
-  font-weight: bold;
+  border-color: #36b37e;
   background: #e3fcef;
+}
+
+.winner .player-name {
+  font-weight: bold;
 }
 
 button,

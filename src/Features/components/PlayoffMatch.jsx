@@ -5,6 +5,8 @@ export default function PlayoffMatch({
   onScoreHomeChange,
   onScoreAwayChange,
   onTechnicalLoss,
+  homeRowRef,
+  awayRowRef,
   readOnly = false
 }) {
   const isBye = Boolean(
@@ -31,14 +33,13 @@ export default function PlayoffMatch({
         {match.label} ({match.id})
         {isBye ? <span className="bye-badge">BYE</span> : null}
       </div>
-      <div className="line">
-        <div
-          className={`player-name ${
-            match.winner && match.winner === match.home ? "winner" : ""
-          }`}
-        >
-          {match.home || "TBD"}
-        </div>
+      <div
+        ref={homeRowRef}
+        className={`line ${
+          match.winner && match.winner === match.home ? "winner" : ""
+        }`}
+      >
+        <div className="player-name">{match.home || "TBD"}</div>
         <input
           type="number"
           min={0}
@@ -66,14 +67,13 @@ export default function PlayoffMatch({
           T
         </button>
       </div>
-      <div className="line">
-        <div
-          className={`player-name ${
-            match.winner && match.winner === match.away ? "winner" : ""
-          }`}
-        >
-          {match.away || "TBD"}
-        </div>
+      <div
+        ref={awayRowRef}
+        className={`line ${
+          match.winner && match.winner === match.away ? "winner" : ""
+        }`}
+      >
+        <div className="player-name">{match.away || "TBD"}</div>
         <input
           type="number"
           min={0}
