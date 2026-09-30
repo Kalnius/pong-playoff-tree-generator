@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildStateUrl, getData, saveData } from "../Data/DataClient";
 import PlayoffRounds from "./components/PlayoffRounds";
+import StandingsList from "./components/StandingsList";
 
 function groupName(index) {
   return String.fromCodePoint(65 + index);
@@ -52,7 +53,16 @@ function getPlayerName(groups, groupIndex, rank) {
   return group.rankedPlayers[rank - 1] || `${group.id}${rank}`;
 }
 
-function makeMatch(id, round, roundName, label, homeSource, awaySource) {
+function makeMatch(
+  id,
+  round,
+  roundName,
+  label,
+  homeSource,
+  awaySource,
+  isPlacingMatch = false,
+  placingMatch = null
+) {
   return {
     id,
     round,
@@ -65,8 +75,16 @@ function makeMatch(id, round, roundName, label, homeSource, awaySource) {
     scoreHome: 0,
     scoreAway: 0,
     winner: "",
-    technicalLoss: ""
+    technicalLoss: "",
+    isPlacingMatch,
+    placingMatch
   };
+}
+
+function getOrdinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 function nextPowerOfTwo(value) {
@@ -152,12 +170,15 @@ function buildKnockoutTournament(groups, nextId) {
       ? Math.max(1, Math.ceil(maxPlayersPerGroup / 2) - 1)
       : Math.max(1, maxPlayersPerGroup - 1);
 
+  const prelimLosersByRound = [];
+
   let currentFeeders = [null, null, null, null];
   let currentRound = 1;
 
   if (maxTier === 1) {
     // 8 players or fewer: Quarterfinals is Round 1
     const quarterfinalFeeders = [];
+    const qfMatchesBySlot = [null, null, null, null];
     for (let slot = 0; slot < 4; slot += 1) {
       const topSeed = getSeedForSlot(groups, groupCount, slot, 0);
       const opponent = getSeedForSlot(groups, groupCount, slot, 1);
@@ -171,16 +192,23 @@ function buildKnockoutTournament(groups, nextId) {
           opponent
         );
         matches.push(match);
+        qfMatchesBySlot[slot] = match;
         quarterfinalFeeders.push({ kind: "winner", matchId: match.id });
       } else {
         quarterfinalFeeders.push(topSeed || opponent);
       }
     }
     currentFeeders = quarterfinalFeeders;
+    prelimLosersByRound.push({
+      round: currentRound,
+      matchesBySlot: qfMatchesBySlot,
+      stage: "qf"
+    });
   } else {
     // Round 1: Tier maxTier vs Tier (maxTier - 1)
     let r1MatchNumber = 1;
     const nextFeeders = [];
+    const r1MatchesBySlot = [null, null, null, null];
     const roundStartIndex = matches.length;
 
     for (let slot = 0; slot < 4; slot += 1) {
@@ -197,12 +225,19 @@ function buildKnockoutTournament(groups, nextId) {
           lowerSeed
         );
         matches.push(match);
+        r1MatchesBySlot[slot] = match;
         nextFeeders.push({ kind: "winner", matchId: match.id });
       } else {
         nextFeeders.push(higherSeed || lowerSeed);
       }
     }
     currentFeeders = nextFeeders;
+    prelimLosersByRound.push({
+      round: currentRound,
+      matchesBySlot: r1MatchesBySlot,
+      stage: "prelim"
+    });
+
     if (matches.length > roundStartIndex) {
       currentRound += 1;
     }
@@ -210,6 +245,7 @@ function buildKnockoutTournament(groups, nextId) {
     // Intermediate preliminary rounds up to the round before Quarterfinals
     for (let tier = maxTier - 2; tier >= 1; tier -= 1) {
       const nextRoundFeeders = [];
+      const roundMatchesBySlot = [null, null, null, null];
       const roundStartIndex = matches.length;
       for (let slot = 0; slot < 4; slot += 1) {
         const seededPlayer = getSeedForSlot(groups, groupCount, slot, tier);
@@ -224,12 +260,18 @@ function buildKnockoutTournament(groups, nextId) {
             incomingFeeder
           );
           matches.push(match);
+          roundMatchesBySlot[slot] = match;
           nextRoundFeeders.push({ kind: "winner", matchId: match.id });
         } else {
           nextRoundFeeders.push(seededPlayer || incomingFeeder);
         }
       }
       currentFeeders = nextRoundFeeders;
+      prelimLosersByRound.push({
+        round: currentRound,
+        matchesBySlot: roundMatchesBySlot,
+        stage: "prelim"
+      });
       if (matches.length > roundStartIndex) {
         currentRound += 1;
       }
@@ -237,6 +279,7 @@ function buildKnockoutTournament(groups, nextId) {
 
     // Quarterfinals
     const quarterfinalFeeders = [];
+    const qfMatchesBySlot = [null, null, null, null];
     for (let slot = 0; slot < 4; slot += 1) {
       const qfSeed = getSeedForSlot(groups, groupCount, slot, 0);
       const incomingFeeder = currentFeeders[slot];
@@ -250,12 +293,18 @@ function buildKnockoutTournament(groups, nextId) {
           incomingFeeder
         );
         matches.push(match);
+        qfMatchesBySlot[slot] = match;
         quarterfinalFeeders.push({ kind: "winner", matchId: match.id });
       } else {
         quarterfinalFeeders.push(qfSeed || incomingFeeder);
       }
     }
     currentFeeders = quarterfinalFeeders;
+    prelimLosersByRound.push({
+      round: currentRound,
+      matchesBySlot: qfMatchesBySlot,
+      stage: "qf"
+    });
   }
 
   // Semifinals
@@ -275,6 +324,7 @@ function buildKnockoutTournament(groups, nextId) {
   }
 
   // Final & 3rd Place
+  const finalRound = currentRound + 1;
   currentRound += 1;
   matches.push(
     makeMatch(
@@ -294,6 +344,131 @@ function buildKnockoutTournament(groups, nextId) {
       { kind: "loser", matchId: semifinalMatches[1].id }
     )
   );
+
+  // Placing matches for losers in preliminary rounds up to Quarterfinals
+  const numStages = prelimLosersByRound.length;
+  prelimLosersByRound.forEach((stageInfo, stageIdx) => {
+    const { round: originRound, matchesBySlot } = stageInfo;
+    const startPlace = 4 * (numStages - stageIdx - 1) + 5;
+    const semiRound = originRound + 1;
+    const finalPlacingRound = originRound + 2;
+
+    const loser0 = matchesBySlot[0]
+      ? { kind: "loser", matchId: matchesBySlot[0].id }
+      : null;
+    const loser1 = matchesBySlot[1]
+      ? { kind: "loser", matchId: matchesBySlot[1].id }
+      : null;
+    const loser2 = matchesBySlot[2]
+      ? { kind: "loser", matchId: matchesBySlot[2].id }
+      : null;
+    const loser3 = matchesBySlot[3]
+      ? { kind: "loser", matchId: matchesBySlot[3].id }
+      : null;
+
+    const semi1Count = (loser0 ? 1 : 0) + (loser1 ? 1 : 0);
+    const semi2Count = (loser2 ? 1 : 0) + (loser3 ? 1 : 0);
+    const totalLosers = semi1Count + semi2Count;
+
+    if (totalLosers <= 1) {
+      return;
+    }
+
+    const getRoundTitle = (r) => {
+      const existing = matches.find((m) => m.round === r);
+      return existing?.roundName || `Round ${r}`;
+    };
+
+    if (totalLosers === 2 && (semi1Count === 2 || semi2Count === 2)) {
+      const p1 = semi1Count === 2 ? loser0 : loser2;
+      const p2 = semi1Count === 2 ? loser1 : loser3;
+      const match = makeMatch(
+        nextId(),
+        semiRound,
+        getRoundTitle(semiRound),
+        `${getOrdinal(startPlace)} Place Match`,
+        p1,
+        p2,
+        true,
+        { placeWinner: startPlace, placeLoser: startPlace + 1 }
+      );
+      matches.push(match);
+      return;
+    }
+
+    let semi1WinnerFeeder = null;
+    let semi1LoserFeeder = null;
+    if (loser0 && loser1) {
+      const semi1 = makeMatch(
+        nextId(),
+        semiRound,
+        getRoundTitle(semiRound),
+        `${getOrdinal(startPlace)}-${getOrdinal(startPlace + 3)} Semi 1`,
+        loser0,
+        loser1,
+        true
+      );
+      matches.push(semi1);
+      semi1WinnerFeeder = { kind: "winner", matchId: semi1.id };
+      semi1LoserFeeder = { kind: "loser", matchId: semi1.id };
+    } else {
+      semi1WinnerFeeder = loser0 || loser1;
+    }
+
+    let semi2WinnerFeeder = null;
+    let semi2LoserFeeder = null;
+    if (loser2 && loser3) {
+      const semi2 = makeMatch(
+        nextId(),
+        semiRound,
+        getRoundTitle(semiRound),
+        `${getOrdinal(startPlace)}-${getOrdinal(startPlace + 3)} Semi 2`,
+        loser2,
+        loser3,
+        true
+      );
+      matches.push(semi2);
+      semi2WinnerFeeder = { kind: "winner", matchId: semi2.id };
+      semi2LoserFeeder = { kind: "loser", matchId: semi2.id };
+    } else {
+      semi2WinnerFeeder = loser2 || loser3;
+    }
+
+    if (semi1WinnerFeeder && semi2WinnerFeeder) {
+      const higherMatch = makeMatch(
+        nextId(),
+        finalPlacingRound,
+        getRoundTitle(finalPlacingRound),
+        `${getOrdinal(startPlace)} Place Match`,
+        semi1WinnerFeeder,
+        semi2WinnerFeeder,
+        true,
+        { placeWinner: startPlace, placeLoser: startPlace + 1 }
+      );
+      matches.push(higherMatch);
+    }
+
+    if (semi1LoserFeeder && semi2LoserFeeder) {
+      const lowerMatch = makeMatch(
+        nextId(),
+        finalPlacingRound,
+        getRoundTitle(finalPlacingRound),
+        `${getOrdinal(startPlace + 2)} Place Match`,
+        semi1LoserFeeder,
+        semi2LoserFeeder,
+        true,
+        { placeWinner: startPlace + 2, placeLoser: startPlace + 3 }
+      );
+      matches.push(lowerMatch);
+    } else if (semi1LoserFeeder || semi2LoserFeeder) {
+      const singleSemi = matches.find(
+        (m) => m.id === (semi1LoserFeeder || semi2LoserFeeder).matchId
+      );
+      if (singleSemi) {
+        singleSemi.placingMatch = { placeLoser: startPlace + 2 };
+      }
+    }
+  });
 
   return {
     groups,
@@ -746,7 +921,7 @@ export default function Admin() {
       </>
 
       {tournament && (
-        <>
+        <div className="playoff-section-wrapper">
           <div className="summary-bar">
             <span>
               <strong>Players:</strong> {tournament.totalPlayers}
@@ -759,21 +934,29 @@ export default function Admin() {
             </span>
           </div>
 
-          <div className="playoff-heading">
-            <h3>Playoff</h3>
-            <div className="actions playoff-actions">
-              <button onClick={clearAllResults}>Clear all results</button>
-              <button className="danger-button" onClick={clearPlayoffTree}>
-                Clear playoff tree
-              </button>
+          <div className="playoff-content-layout">
+            <StandingsList
+              groups={tournament.groups || groups}
+              matches={tournament.matches}
+            />
+            <div className="playoff-main-column">
+              <div className="playoff-heading">
+                <h3>Playoff</h3>
+                <div className="actions playoff-actions">
+                  <button onClick={clearAllResults}>Clear all results</button>
+                  <button className="danger-button" onClick={clearPlayoffTree}>
+                    Clear playoff tree
+                  </button>
+                </div>
+              </div>
+              <PlayoffRounds
+                tournament={tournament}
+                onTechnicalLoss={handleTechnicalLoss}
+                onScoreChange={updateMatchScores}
+              />
             </div>
           </div>
-          <PlayoffRounds
-            tournament={tournament}
-            onTechnicalLoss={handleTechnicalLoss}
-            onScoreChange={updateMatchScores}
-          />
-        </>
+        </div>
       )}
     </div>
   );

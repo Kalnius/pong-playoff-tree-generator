@@ -116,6 +116,23 @@ body {
   border-radius: 8px;
 }
 
+.playoff-section-wrapper {
+  margin-top: 8px;
+}
+
+.playoff-content-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.playoff-main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .playoff-heading {
   display: flex;
   flex-wrap: wrap;
@@ -159,6 +176,7 @@ body {
 }
 
 .round {
+  width: 250px;
   min-width: 250px;
   background: white;
   border: 1px solid #dfe1e6;
@@ -174,10 +192,59 @@ body {
   align-items: center;
 }
 
+.round-matches-container {
+  display: flex;
+  flex-direction: column;
+}
+
 .round-matches {
   display: grid;
   grid-template-rows: repeat(8, 72px);
   height: 576px;
+}
+
+.round-matches.placing-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: auto;
+  min-height: 0;
+}
+
+.round-matches.placing-matches .match-position {
+  width: 100%;
+}
+
+.placing-section {
+  margin-top: 16px;
+}
+
+.placing-separator {
+  position: relative;
+  text-align: center;
+  margin: 12px 0 16px;
+}
+
+.placing-separator::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed #c1c7d0;
+  z-index: 1;
+}
+
+.placing-separator span {
+  position: relative;
+  z-index: 2;
+  background: white;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b778c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .match-position {

@@ -42,12 +42,13 @@ function getWinnerConnections(matches) {
 }
 
 function getRoundLayout(matches) {
-  const semifinalMatches = matches.filter(
+  const mainMatches = matches.filter((match) => !match.isPlacingMatch);
+  const semifinalMatches = mainMatches.filter(
     (match) => match.roundName === "Semifinals"
   );
   const nextMatchByWinnerId = new Map();
 
-  matches.forEach((match) => {
+  mainMatches.forEach((match) => {
     [match.homeSource, match.awaySource].forEach((source) => {
       const matchId = sourceMatchId(source);
       if (matchId && source.kind === "winner") {
@@ -60,13 +61,13 @@ function getRoundLayout(matches) {
   semifinalMatches.forEach((match, semifinalIndex) => {
     [match.homeSource, match.awaySource].forEach((source, sideIndex) => {
       const matchId = sourceMatchId(source);
-      if (matchId) {
+      if (matchId && source.kind === "winner") {
         laneByMatchId.set(matchId, semifinalIndex * 2 + sideIndex);
       }
     });
   });
 
-  matches.forEach((match) => {
+  mainMatches.forEach((match) => {
     if (match.roundName === "Semifinals" || match.roundName === "Final") {
       return;
     }
@@ -88,11 +89,11 @@ function getRoundLayout(matches) {
 }
 
 function getGridRow(match, matchIndex, layout) {
-  if (match.roundName === "Final") {
+  if (match.roundName === "Final" && !match.isPlacingMatch) {
     return match.label === "3rd Place" ? "7 / span 2" : "3 / span 4";
   }
 
-  if (match.roundName === "Semifinals") {
+  if (match.roundName === "Semifinals" && !match.isPlacingMatch) {
     const semifinalIndex = layout.semifinalMatches.findIndex(
       (candidate) => candidate.id === match.id
     );
@@ -216,40 +217,89 @@ export default function PlayoffRounds({
       {Object.keys(groupedMatches)
         .map(Number)
         .sort((a, b) => a - b)
-        .map((round) => (
-          <div className="round" key={round}>
-            <h4>{groupedMatches[round][0]?.roundName || `Round ${round}`}</h4>
-            <div className="round-matches">
-              {groupedMatches[round].map((match, matchIndex) => (
-                <div
-                  className="match-position"
-                  key={match.id}
-                  style={{ gridRow: getGridRow(match, matchIndex, layout) }}
-                >
-                  <PlayoffMatch
-                    match={match}
-                    readOnly={readOnly}
-                    homeRowRef={(element) =>
-                      registerRowRef(match.id, "home", element)
-                    }
-                    awayRowRef={(element) =>
-                      registerRowRef(match.id, "away", element)
-                    }
-                    onTechnicalLoss={(side) =>
-                      onTechnicalLoss?.(match.id, side)
-                    }
-                    onScoreHomeChange={(scoreHome) =>
-                      onScoreChange?.(match.id, scoreHome, match.scoreAway)
-                    }
-                    onScoreAwayChange={(scoreAway) =>
-                      onScoreChange?.(match.id, match.scoreHome, scoreAway)
-                    }
-                  />
+        .map((round) => {
+          const roundMatches = groupedMatches[round] || [];
+          const mainMatches = roundMatches.filter((m) => !m.isPlacingMatch);
+          const placingMatches = roundMatches.filter((m) => m.isPlacingMatch);
+
+          return (
+            <div className="round" key={round}>
+              <h4>{roundMatches[0]?.roundName || `Round ${round}`}</h4>
+              <div className="round-matches-container">
+                <div className="round-matches main-matches">
+                  {mainMatches.map((match, matchIndex) => (
+                    <div
+                      className="match-position"
+                      key={match.id}
+                      style={{ gridRow: getGridRow(match, matchIndex, layout) }}
+                    >
+                      <PlayoffMatch
+                        match={match}
+                        readOnly={readOnly}
+                        homeRowRef={(element) =>
+                          registerRowRef(match.id, "home", element)
+                        }
+                        awayRowRef={(element) =>
+                          registerRowRef(match.id, "away", element)
+                        }
+                        onTechnicalLoss={(side) =>
+                          onTechnicalLoss?.(match.id, side)
+                        }
+                        onScoreHomeChange={(scoreHome) =>
+                          onScoreChange?.(match.id, scoreHome, match.scoreAway)
+                        }
+                        onScoreAwayChange={(scoreAway) =>
+                          onScoreChange?.(match.id, match.scoreHome, scoreAway)
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                {placingMatches.length > 0 && (
+                  <div className="placing-section">
+                    <div className="placing-separator">
+                      <span>Matches for placing</span>
+                    </div>
+                    <div className="round-matches placing-matches">
+                      {placingMatches.map((match) => (
+                        <div className="match-position" key={match.id}>
+                          <PlayoffMatch
+                            match={match}
+                            readOnly={readOnly}
+                            homeRowRef={(element) =>
+                              registerRowRef(match.id, "home", element)
+                            }
+                            awayRowRef={(element) =>
+                              registerRowRef(match.id, "away", element)
+                            }
+                            onTechnicalLoss={(side) =>
+                              onTechnicalLoss?.(match.id, side)
+                            }
+                            onScoreHomeChange={(scoreHome) =>
+                              onScoreChange?.(
+                                match.id,
+                                scoreHome,
+                                match.scoreAway
+                              )
+                            }
+                            onScoreAwayChange={(scoreAway) =>
+                              onScoreChange?.(
+                                match.id,
+                                match.scoreHome,
+                                scoreAway
+                              )
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
     </div>
   );
 }
