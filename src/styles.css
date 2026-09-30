@@ -5,10 +5,6 @@ body {
   background: #f7f8fa;
 }
 
-.container {
-  max-width: 1200px;
-}
-
 .intro {
   max-width: 980px;
   color: #42526e;
@@ -124,8 +120,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  column-gap: 24px;
+  row-gap: 8px;
 }
 
 .playoff-heading h3,

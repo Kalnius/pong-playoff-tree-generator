@@ -10,8 +10,10 @@ export default function AdminLayout() {
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          flexWrap: "wrap",
           alignItems: "center",
+          columnGap: 32,
+          rowGap: 8,
           marginBottom: 16
         }}
       >
