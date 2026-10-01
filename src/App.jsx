@@ -45,7 +45,10 @@ export const router = createBrowserRouter(
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </>
-  )
+  ),
+  {
+    basename: "/pong-playoff-tree-generator"
+  }
 );
 
 export default function App() {
