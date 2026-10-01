@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { buildStateUrl, getData, saveData } from "../Data/DataClient";
+import { useLoaderData } from "react-router";
+import { getData, saveData, updateData } from "../Data/JsonBinDataClient";
 import PlayoffRounds from "./components/PlayoffRounds";
 import StandingsList from "./components/StandingsList";
 
@@ -650,12 +651,8 @@ function parseState(data) {
   return { groupCount, groups, tournament };
 }
 
-async function copyText(value) {
-  if (!navigator.clipboard?.writeText) {
-    throw new Error("Clipboard API not available.");
-  }
-
-  await navigator.clipboard.writeText(value);
+export function adminLoader() {
+  return getData();
 }
 
 function downloadText(filename, text, mimeType) {
@@ -669,15 +666,16 @@ function downloadText(filename, text, mimeType) {
 }
 
 export default function Admin() {
+  const loaderData = useLoaderData();
   const initialData = useMemo(() => {
-    return parseState(getData()) || getDefaultState();
+    return parseState(loaderData) || getDefaultState();
   }, []);
 
   const [groupCount, setGroupCount] = useState(initialData.groupCount);
   const [groups, setGroups] = useState(initialData.groups);
   const [tournament, setTournament] = useState(initialData.tournament);
   const [saveMsg, setSaveMsg] = useState("");
-  const [shareMsg, setShareMsg] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const configInitializedRef = useRef(false);
   const fileInputRef = useRef(null);
 
@@ -685,8 +683,6 @@ export default function Admin() {
     () => ({ groupCount, groups, tournament }),
     [groupCount, groups, tournament]
   );
-
-  const shareUrl = useMemo(() => buildStateUrl(payload), [payload]);
 
   const setTemporaryMessage = (setter, value) => {
     setter(value);
@@ -719,7 +715,7 @@ export default function Admin() {
   }, [groups]);
 
   useEffect(() => {
-    saveData(payload);
+    updateData(payload);
   }, [payload]);
 
   const updatePlayer = (groupIndex, playerIndex, value) => {
@@ -783,24 +779,11 @@ export default function Admin() {
     setTournament(null);
   };
 
-  const onSave = () => {
-    const ok = saveData(payload);
-    setTemporaryMessage(
-      setSaveMsg,
-      ok ? "Saved in this browser and in the URL." : "Could not save locally."
-    );
-  };
-
-  const onCopyShareLink = async () => {
-    try {
-      await copyText(shareUrl);
-      setTemporaryMessage(setShareMsg, "Share link copied.");
-    } catch {
-      setTemporaryMessage(
-        setShareMsg,
-        "Clipboard access is not available in this browser."
-      );
-    }
+  const onSave = async () => {
+    setIsSaving(true);
+    const ok = await saveData(payload);
+    setIsSaving(false);
+    setTemporaryMessage(setSaveMsg, ok ? "Saved." : "Could not save.");
   };
 
   const onExportJson = () => {
@@ -835,10 +818,8 @@ export default function Admin() {
       </p>
 
       <div className="info-panel">
-        <strong>Important GitHub Pages persistence note:</strong> local browser
-        save is still available, but the durable, redeploy-safe version is the
-        URL itself. Every change is mirrored into the page URL, and you can also
-        export a JSON backup.
+        <strong>Note:</strong> changes are kept in memory only until you press
+        <strong> Save</strong>. Refreshing the page discards unsaved changes.
       </div>
 
       <div className="config">
@@ -893,8 +874,9 @@ export default function Admin() {
       <>
         <div className="actions">
           <button onClick={onGenerate}>Generate Playoff Tree</button>
-          <button onClick={onSave}>Save in browser</button>
-          <button onClick={onCopyShareLink}>Copy live share link</button>
+          <button onClick={onSave} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save"}
+          </button>
           <button onClick={onExportJson}>Download JSON backup</button>
           <button onClick={() => fileInputRef.current?.click()}>
             Import JSON backup
@@ -909,14 +891,6 @@ export default function Admin() {
         </div>
         <div className="messages">
           <span>{saveMsg}</span>
-          <span>{shareMsg}</span>
-        </div>
-
-        <div className="share-panel">
-          <label>
-            <span>Live share link</span>
-            <input type="text" readOnly value={shareUrl} />
-          </label>
         </div>
       </>
 

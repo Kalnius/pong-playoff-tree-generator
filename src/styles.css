@@ -20,6 +20,40 @@ body {
   line-height: 1.5;
 }
 
+.status-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  color: #172b4d;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.error-panel {
+  background: #ffebe6;
+  border-color: #ffbdad;
+  color: #bf2600;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #b3d4ff;
+  border-top-color: #0052cc;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .config {
   display: flex;
   flex-wrap: wrap;
@@ -81,28 +115,6 @@ body {
   gap: 12px;
   min-height: 20px;
   color: #0c66e4;
-}
-
-.share-panel {
-  display: grid;
-  gap: 12px;
-  margin: 14px 0 18px;
-}
-
-.share-panel label {
-  display: grid;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.share-panel input {
-  width: 100%;
-  max-width: 100%;
-  padding: 8px;
-  border: 1px solid #c1c7d0;
-  border-radius: 6px;
-  background: #fff;
-  color: #091e42;
 }
 
 .summary-bar {

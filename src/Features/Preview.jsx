@@ -1,11 +1,11 @@
 import React from "react";
 import { Link, useLoaderData } from "react-router";
-import { getData } from "../Data/DataClient";
+import { getData } from "../Data/JsonBinDataClient";
 import PlayoffRounds from "./components/PlayoffRounds";
 import StandingsList from "./components/StandingsList";
 
-export function previewLoader({ request }) {
-  return getData({ url: request.url });
+export function previewLoader() {
+  return getData();
 }
 
 export default function Preview() {

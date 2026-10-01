@@ -16,6 +16,10 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 
+#Allow repo secrets
+env:
+  VITE_JSONBIN_MASTER_KEY: ${{ secrets.VITE_JSONBIN_MASTER_KEY }}
+
 jobs:
   build:
     name: Build site

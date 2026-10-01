@@ -69,11 +69,9 @@ Because GitHub Pages is static hosting, there is no built-in server database.
 
 To avoid losing important playoff data:
 
-- the app automatically mirrors the full state into the page URL hash
-- the app also stores a local browser copy in `localStorage`
+- state is stored in a JsonBin bin (loaded once per page session)
+- edits are kept in memory and only persisted when you press **Save**
 - you can download a compact JSON backup and import it later
-
-The **share link** is the most redeploy-safe option because the important state travels with the URL itself.
 
 ## PNG export note
 
