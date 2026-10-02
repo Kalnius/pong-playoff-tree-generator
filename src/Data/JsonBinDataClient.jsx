@@ -6,7 +6,7 @@ let loadPromise = null;
 
 export function getData() {
   if (!loadPromise) {
-    loadPromise = fetch(`${BIN_URL}`, {
+    loadPromise = fetch(`${BIN_URL}/latest`, {
       method: "GET",
       headers: {
         "X-Master-Key": import.meta.env.VITE_JSONBIN_MASTER_KEY,
