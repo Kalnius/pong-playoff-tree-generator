@@ -45,9 +45,13 @@ The app can be hosted on GitHub Pages as a standalone static app.
 
 ```powershell
 npm install
-npm --prefix static/playoff-ui install
 npm run dev
 ```
+
+In the Vite development server, MSW intercepts JsonBin reads and saves. Saved
+data stays in this browser's local storage across reloads; it is never sent to
+JsonBin. To start fresh, clear this site's local storage. Builds and previews do
+not enable the mock and use the real JsonBin endpoint.
 
 ## Build
 
