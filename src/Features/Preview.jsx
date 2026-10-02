@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 import { getData } from "../Data/JsonBinDataClient";
 import PlayoffRounds from "./components/PlayoffRounds";
 import StandingsList from "./components/StandingsList";
@@ -31,11 +31,7 @@ export default function Preview() {
           </div>
         </div>
       ) : (
-        <div className="info-panel">
-          No playoff tree generated yet. Head to the{" "}
-          <Link to="/admin">Admin</Link> page to configure and generate the
-          playoff tree first.
-        </div>
+        <div className="info-panel">No playoff tree generated yet.</div>
       )}
     </div>
   );

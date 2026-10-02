@@ -5,7 +5,10 @@ import "./styles.css";
 async function start() {
   if (import.meta.env.DEV) {
     const { worker } = await import("./Data/localJsonBinMock");
-    await worker.start({ onUnhandledRequest: "bypass" });
+    await worker.start({
+      onUnhandledRequest: "bypass",
+      serviceWorker: { url: `${import.meta.env.BASE_URL}mockServiceWorker.js` }
+    });
   }
 
   const { default: App } = await import("./App");

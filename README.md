@@ -1,6 +1,8 @@
 # Table Tennis Playoff Form (Static App)
 
-ACCESS VIA: https://kalnius.github.io/pong-playoff-tree-generator/
+Public view: https://kalnius.github.io/pong-playoff-tree-generator/
+
+Admin: type https://kalnius.github.io/pong-playoff-tree-generator/admin in the address bar. The admin screen links to /preview; the public view does not link to either admin page.
 
 This project is now a standalone static React app (no Forge runtime).
 
@@ -59,13 +61,15 @@ not enable the mock and use the real JsonBin endpoint.
 npm run build
 ```
 
-Build output is generated in `static/playoff-ui/dist`.
+Build output is generated in `dist`.
 
 ## GitHub Pages hosting
 
-Deploy the contents of `static/playoff-ui/dist` to your GitHub Pages site.
+Deploy the contents of `dist` to your GitHub Pages site (the included GitHub Actions workflow does this automatically).
 
-The app now ships with `static/playoff-ui/vite.config.js` configured with a relative `base`, so project-path GitHub Pages deployments work out of the box.
+Vite builds separate `index.html` (public) and `admin.html` (admin) entries. The build also publishes `admin/index.html` from the admin entry for direct admin visits. Navigate to `/preview` from the admin screen; GitHub Pages does not serve `/preview` as a standalone page, so reloading it or entering it directly will not work. Asset URLs use the `/pong-playoff-tree-generator/` project base.
+
+The admin URL is unlisted, not access-controlled. Anyone who knows the URL can open it; protect the data and write API separately if access restrictions are required.
 
 ## Persistence and backup
 
